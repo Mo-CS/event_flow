@@ -1,0 +1,372 @@
+import { useState, useEffect, useCallback } from "react"
+import { useParams, Link, useSearchParams } from "react-router-dom"
+import { Calendar, MapPin, Clock, User, Users, Loader2, Star, Sparkles, Lock } from "lucide-react"
+import { toast } from "sonner"
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
+import { Badge } from "../components/ui/badge"
+import { Button } from "../components/ui/button"
+import { Textarea } from "../components/ui/textarea"
+import { Card, CardContent } from "../components/ui/card"
+import { useAuth } from "../contexts/AuthContext"
+import { getEventById, getRegistrations, registerForEvent, cancelRegistration } from "../services/eventService"
+import { getSessionsByEvent, getSpeakersBySession } from "../services/sessionService"
+import { getFeedbackByEvent, submitFeedback } from "../services/feedbackService"
+import { getProfilesByIds } from "../services/userService"
+import { getVenueById } from "../services/venueService"
+import type { Event, Session, Speaker, Registration, Feedback, Venue } from "../types"
+
+export function EventDetail() {
+  const { id } = useParams<{ id: string }>()
+  const [searchParams] = useSearchParams()
+  const code = searchParams.get("code")
+  const { isAuthenticated, profile, role, user } = useAuth()
+  const [event, setEvent] = useState<Event | null>(null)
+  const [linkError, setLinkError] = useState<string | null>(null)
+  const [validCode, setValidCode] = useState<string | undefined>()
+  const [invitedEmail, setInvitedEmail] = useState<string | null>(null)
+  const [sessions, setSessions] = useState<Session[]>([])
+  const [speakersMap, setSpeakersMap] = useState<Record<string, Speaker[]>>({})
+  const [registrations, setRegistrations] = useState<Registration[]>([])
+  const [myRegistration, setMyRegistration] = useState<Registration | undefined>()
+  const [registering, setRegistering] = useState(false)
+  const [feedbackList, setFeedbackList] = useState<Feedback[]>([])
+  const [profileMap, setProfileMap] = useState<Map<string, any>>(new Map())
+  const [venue, setVenue] = useState<Venue | undefined>()
+  const [rating, setRating] = useState(5)
+  const [review, setReview] = useState("")
+  const [submitting, setSubmitting] = useState(false)
+  const [loading, setLoading] = useState(true)
+
+  const fetchData = useCallback(async () => {
+    if (!id) return
+    const data = await getEventById(id)
+    if (data && data.visibility === "private") {
+      if (!code) {
+        setLoading(false)
+        return
+      }
+      const { getLinkByCode } = await import("../services/invitationService")
+      const link = await getLinkByCode(code)
+      if (!link || link.eventId !== data.id) {
+        setLinkError("Invalid invitation link")
+        setLoading(false)
+        return
+      }
+      if (link.used) {
+        setLinkError("This invitation link has already been used")
+        setLoading(false)
+        return
+      }
+      setValidCode(code)
+      setInvitedEmail(link.email)
+    }
+    setEvent(data ?? null)
+    if (data) {
+      const [sess, regs, fb] = await Promise.all([getSessionsByEvent(data.id), getRegistrations(data.id), getFeedbackByEvent(data.id)])
+      setSessions(sess)
+      setRegistrations(regs)
+      setFeedbackList(fb)
+      const venueData = await getVenueById(data.venueId)
+      setVenue(venueData)
+      const attendeeIds = [...new Set(fb.map((f) => f.attendeeId))]
+      if (attendeeIds.length > 0) {
+        const profs = await getProfilesByIds(attendeeIds)
+        setProfileMap(new Map(profs.map((p: any) => [p.id, p])))
+      }
+      const map: Record<string, Speaker[]> = {}
+      for (const s of sess) { map[s.id] = await getSpeakersBySession(s.id) }
+      setSpeakersMap(map)
+      if (profile) {
+        const mine = regs.find((r) => r.attendeeId === profile.id && r.status !== "cancelled")
+        setMyRegistration(mine)
+      }
+    }
+    setLoading(false)
+  }, [id, profile])
+
+  useEffect(() => { fetchData() }, [fetchData])
+
+  const handleRegister = async () => {
+    if (!id || !profile) return
+    setRegistering(true)
+    try {
+      const result = await registerForEvent(id, profile.id, validCode)
+      if (result.waitlisted) {
+        toast.success("Event is full — you've been added to the waiting list!")
+      } else {
+        toast.success("Successfully registered! Check your dashboard for tickets.")
+      }
+      fetchData()
+    } catch (err: any) {
+      toast.error(err.message ?? "Registration failed")
+    } finally {
+      setRegistering(false)
+    }
+  }
+
+  const handleCancel = async () => {
+    if (!myRegistration) return
+    setRegistering(true)
+    try {
+      await cancelRegistration(myRegistration.id)
+      toast.success("Registration cancelled")
+      fetchData()
+    } catch {
+      toast.error("Failed to cancel")
+    } finally {
+      setRegistering(false)
+    }
+  }
+
+  const handleSubmitReview = async () => {
+    if (!id || !profile || !review.trim()) return
+    setSubmitting(true)
+    try {
+      await submitFeedback({ eventId: id, attendeeId: profile.id, rating, comment: review.trim(), submittedAt: new Date().toISOString() })
+      toast.success("Review submitted!")
+      setReview("")
+      setRating(5)
+      const fb = await getFeedbackByEvent(id)
+      setFeedbackList(fb)
+    } catch (e: any) {
+      toast.error(e.message ?? "Failed to submit review")
+    } finally {
+      setSubmitting(false)
+    }
+  }
+
+  const avgRating = feedbackList.length > 0
+    ? (feedbackList.reduce((s, f) => s + f.rating, 0) / feedbackList.length).toFixed(1)
+    : null
+
+  const hasSubmitted = profile ? feedbackList.some((f) => f.attendeeId === profile.id) : false
+  const canReview = profile && myRegistration && myRegistration.status === "confirmed" && !hasSubmitted
+
+  if (loading) return <div className="flex justify-center py-20"><div className="animate-spin rounded-full h-8 w-8 border-2 border-primary/20 border-t-primary" /></div>
+  if (!event || linkError) return (
+    <div className="text-center py-20 text-muted-foreground">
+      <Lock size={48} className="mx-auto mb-4 opacity-30" />
+      <p className="text-lg font-medium">{linkError ?? "Event not found"}</p>
+      <p className="text-sm mt-2">This event is private and requires a valid invitation link to access.</p>
+    </div>
+  )
+
+  const emailMismatch = !!(event.visibility === "private" && invitedEmail && user && user.email !== invitedEmail)
+
+  const confirmedCount = registrations.filter((r) => r.status === "confirmed").length
+  const spotsLeft = event.capacity - confirmedCount
+
+  return (
+    <div className="relative max-w-4xl mx-auto px-4 py-12">
+      <div className="absolute top-20 left-0 w-72 h-72 bg-teal-500/12 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute top-40 right-0 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-40 left-1/3 w-60 h-60 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
+      <div className="absolute bottom-20 right-1/4 w-56 h-56 bg-red-500/10 rounded-full blur-3xl pointer-events-none" />
+
+      <div className="relative animate-fade-in-up">
+        <div className="relative h-64 rounded-xl overflow-hidden mb-8 bg-gradient-to-br from-teal-500/30 via-amber-500/20 to-emerald-500/20 flex items-center justify-center">
+          <div className="absolute inset-0 bg-gradient-to-t from-background/60 to-transparent" />
+          <div className="absolute top-5 right-5 flex items-center gap-2">
+            {event.visibility === "private" && (
+              <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-amber-500/20 backdrop-blur-sm text-xs font-medium border border-amber-500/30 text-amber-600 dark:text-amber-400">
+                <Lock size={14} />
+                Private Event
+              </div>
+            )}
+            <div className="flex items-center gap-1.5 px-3 py-1.5 rounded-full bg-white/70 dark:bg-background/70 backdrop-blur-sm text-xs font-medium border border-border/50">
+              <Sparkles size={14} className="text-primary" />
+              Featured Event
+            </div>
+          </div>
+          <Calendar size={64} className="text-foreground/15 relative" />
+        </div>
+
+        <div className="flex flex-col lg:flex-row lg:items-start gap-8">
+          <div className="flex-1">
+            <h1 className="text-3xl font-bold mb-4">{event.title}</h1>
+            {event.visibility === "private" && invitedEmail && (
+              <div className="flex items-center gap-2 mb-4 text-sm text-muted-foreground bg-amber-500/10 border border-amber-500/20 rounded-lg px-4 py-2">
+                <Lock size={14} className="text-amber-500" />
+                Invitation for <strong>{invitedEmail}</strong>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-4 mb-6 text-sm text-muted-foreground">
+              <span className="flex items-center gap-1.5"><Calendar size={16} className="text-teal-500" />{new Date(event.startDate).toLocaleDateString()} - {new Date(event.endDate).toLocaleDateString()}</span>
+              <span className="flex items-center gap-1.5"><MapPin size={16} className="text-teal-500" />{venue?.name ?? "Unknown venue"}</span>
+              <span className="flex items-center gap-1.5"><Users size={16} className="text-teal-500" />{confirmedCount}/{event.capacity} registered</span>
+            </div>
+            {spotsLeft > 0 && spotsLeft <= 10 && (
+              <Badge variant="destructive" className="mb-4">Only {spotsLeft} spot{spotsLeft > 1 ? "s" : ""} left!</Badge>
+            )}
+          </div>
+
+          <div className="lg:w-72 w-full">
+            <div className="rounded-xl bg-gradient-to-br from-teal-500/10 via-amber-500/10 to-emerald-500/10 p-0.5 shadow-lg shadow-teal-500/10">
+              <div className="rounded-[11px] bg-white/90 dark:bg-card/90 backdrop-blur-sm p-6">
+                {!isAuthenticated ? (
+                  <div className="text-center space-y-3">
+                    <p className="text-sm text-muted-foreground">Login to register for this event</p>
+                    <Link to="/login" className="block w-full bg-gradient-to-r from-teal-500 via-amber-500 to-emerald-500 text-white py-2 rounded-lg text-sm font-medium text-center hover:opacity-90 transition-opacity shadow-md">Login</Link>
+                  </div>
+                  ) : role === "attendee" ? (
+                  emailMismatch ? (
+                    <div className="text-center space-y-2">
+                      <Lock size={24} className="mx-auto text-destructive opacity-60" />
+                      <p className="text-sm text-destructive font-medium">Wrong account</p>
+                      <p className="text-xs text-muted-foreground">This invitation was sent to <strong>{invitedEmail}</strong>. You are logged in as <strong>{user?.email}</strong>.</p>
+                    </div>
+                  ) : new Date(event.endDate) < new Date() ? (
+                    <p className="text-sm text-muted-foreground text-center">Event has ended</p>
+                  ) : (
+                    <div className="space-y-3">
+                      {myRegistration ? (
+                        <>
+                          <Badge variant={myRegistration.status === "confirmed" ? "default" : "secondary"} className="w-full justify-center py-1.5 text-sm">
+                            {myRegistration.status === "confirmed" ? "✓ Registered" : myRegistration.status === "waitlisted" ? "⏳ On Waiting List" : myRegistration.status}
+                          </Badge>
+                          <Button variant="outline" className="w-full text-destructive" onClick={handleCancel} disabled={registering}>
+                            {registering ? <Loader2 size={16} className="animate-spin" /> : null}
+                            Cancel Registration
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <div className="text-center mb-2">
+                            <p className="text-2xl font-bold">{spotsLeft}</p>
+                            <p className="text-xs text-muted-foreground">spots remaining</p>
+                          </div>
+                          <Button className="w-full bg-gradient-to-r from-teal-500 via-amber-500 to-emerald-500 text-white shadow-md shadow-teal-500/20" onClick={handleRegister} disabled={registering}>
+                            {registering ? <Loader2 size={16} className="animate-spin" /> : null}
+                            {spotsLeft <= 0 ? "Join Waiting List" : "Register Now"}
+                          </Button>
+                        </>
+                      )}
+                    </div>
+                  )
+                ) : (
+                  <p className="text-sm text-muted-foreground text-center">{role === "admin" ? "Admins cannot register for events" : "Organizers cannot register for events"}</p>
+                )}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <Tabs defaultValue="about" className="mt-8">
+          <TabsList>
+            <TabsTrigger value="about">About</TabsTrigger>
+            {sessions.length > 0 && <TabsTrigger value="schedule">Schedule ({sessions.length})</TabsTrigger>}
+            <TabsTrigger value="reviews">Reviews ({feedbackList.length})</TabsTrigger>
+          </TabsList>
+          <TabsContent value="about" className="mt-6">
+            <p className="text-muted-foreground leading-relaxed">{event.description}</p>
+          </TabsContent>
+          {sessions.length > 0 && (
+            <TabsContent value="schedule" className="mt-6 space-y-4">
+              {sessions.map((session) => {
+                const sp = speakersMap[session.id] ?? []
+                return (
+                  <div key={session.id} className="rounded-xl border border-border bg-card p-5 hover:shadow-md transition-shadow">
+                    <div className="flex items-start justify-between">
+                      <div>
+                        <h3 className="font-semibold">{session.title}</h3>
+                        <div className="flex flex-wrap gap-3 mt-1 text-sm text-muted-foreground">
+                          <span className="flex items-center gap-1">
+                            <Clock size={14} />
+                            {new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                            {" — "}
+                            {new Date(session.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}
+                          </span>
+                          <span className="flex items-center gap-1"><MapPin size={14} /> {session.roomName}</span>
+                        </div>
+                      </div>
+                    </div>
+                    {session.description && <p className="mt-3 text-sm text-muted-foreground">{session.description}</p>}
+                    {sp.length > 0 && (
+                      <div className="mt-4 pt-4 border-t border-border">
+                        <p className="text-xs text-muted-foreground uppercase tracking-wide font-medium mb-2">Speakers</p>
+                        <div className="flex flex-wrap gap-3">
+                          {sp.map((speaker) => (
+                            <Badge key={speaker.id} variant="secondary" className="gap-1">
+                              <User size={12} /> {speaker.name}
+                            </Badge>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                )
+              })}
+            </TabsContent>
+          )}
+          <TabsContent value="reviews" className="mt-6 space-y-6">
+            {avgRating && (
+              <div className="flex items-center gap-3 p-4 bg-gradient-to-r from-amber-500/15 via-orange-500/15 to-rose-500/15 rounded-lg border border-amber-500/20">
+                <Star size={28} className="text-amber-500 fill-amber-500" />
+                <span className="text-2xl font-bold">{avgRating}</span>
+                <span className="text-sm text-muted-foreground">({feedbackList.length} review{feedbackList.length > 1 ? "s" : ""})</span>
+              </div>
+            )}
+
+            {canReview && (
+              <Card>
+                <CardContent className="p-4 space-y-3">
+                  <h4 className="font-medium">Write a Review</h4>
+                  <div className="flex items-center gap-1">
+                    {[1, 2, 3, 4, 5].map((n) => (
+                      <button key={n} type="button" onClick={() => setRating(n)} className="p-0.5">
+                        <Star size={20} className={n <= rating ? "text-amber-500 fill-amber-500" : "text-muted-foreground"} />
+                      </button>
+                    ))}
+                  </div>
+                  <Textarea placeholder="Share your experience..." value={review} onChange={(e) => setReview(e.target.value)} rows={3} />
+                  <Button size="sm" onClick={handleSubmitReview} disabled={submitting || !review.trim()}>
+                    {submitting ? <Loader2 size={14} className="animate-spin mr-1" /> : null}
+                    Submit Review
+                  </Button>
+                </CardContent>
+              </Card>
+            )}
+
+            {feedbackList.length === 0 ? (
+              <p className="text-sm text-muted-foreground text-center py-8">No reviews yet.</p>
+            ) : (
+              <div className="space-y-4">
+                {feedbackList.map((fb) => {
+                  const attendee = profileMap.get(fb.attendeeId)
+                  return (
+                    <div key={fb.id} className="rounded-xl border border-border bg-card p-5 hover:shadow-md transition-shadow">
+                      <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-2">
+                          <div className="w-8 h-8 rounded-full bg-gradient-to-br from-primary/40 to-accent/40 flex items-center justify-center text-xs font-medium">
+                            {attendee?.firstName?.[0]}{attendee?.lastName?.[0]}
+                          </div>
+                          <div>
+                            <p className="text-sm font-medium">{attendee?.firstName} {attendee?.lastName}</p>
+                            <p className="text-xs text-muted-foreground">{new Date(fb.submittedAt).toLocaleDateString()}</p>
+                          </div>
+                        </div>
+                        <div className="flex items-center gap-0.5">
+                          {Array.from({ length: 5 }).map((_, i) => (
+                            <Star key={i} size={14} className={i < fb.rating ? "text-amber-500 fill-amber-500" : "text-muted-foreground/30"} />
+                          ))}
+                        </div>
+                      </div>
+                      <p className="mt-3 text-sm">{fb.comment}</p>
+                      {fb.response && (
+                        <div className="mt-3 pl-4 border-l-2 border-primary/30">
+                          <p className="text-xs font-medium text-primary">Organizer response</p>
+                          <p className="text-sm text-muted-foreground mt-1">{fb.response}</p>
+                          <p className="text-xs text-muted-foreground mt-1">{fb.respondedAt ? new Date(fb.respondedAt).toLocaleDateString() : ""}</p>
+                        </div>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )}
+          </TabsContent>
+        </Tabs>
+      </div>
+    </div>
+  )
+}

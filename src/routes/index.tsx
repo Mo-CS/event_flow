@@ -1,0 +1,85 @@
+import { createBrowserRouter, Navigate } from "react-router-dom"
+import { AppLayout } from "../components/layout/AppLayout"
+import { PublicLayout } from "../components/layout/PublicLayout"
+import { ProtectedRoute } from "./ProtectedRoute"
+import { PublicRoute } from "./PublicRoute"
+import { Home } from "../pages/Home"
+import { Events } from "../pages/Events"
+import { EventDetail } from "../pages/EventDetail"
+import { Login } from "../pages/Login"
+import { Register } from "../pages/Register"
+import { ForgotPassword } from "../pages/ForgotPassword"
+import { ResetPassword } from "../pages/ResetPassword"
+import { About } from "../pages/About"
+import { Contact } from "../pages/Contact"
+import { Dashboard } from "../pages/Dashboard"
+import { UserManagement } from "../pages/UserManagement"
+import { UserDetail } from "../pages/UserDetail"
+import { CategoryManagement } from "../pages/CategoryManagement"
+import { VenueManagement } from "../pages/VenueManagement"
+import { EventManagement } from "../pages/EventManagement"
+import { EventForm } from "../pages/EventForm"
+import { ScheduleManagement } from "../pages/ScheduleManagement"
+import { RegistrationManagement } from "../pages/RegistrationManagement"
+import { AttendanceManagement } from "../pages/AttendanceManagement"
+import { InvitationManagement } from "../pages/InvitationManagement"
+import { Profile } from "../pages/Profile"
+import { TicketDetail } from "../pages/TicketDetail"
+import { Notifications } from "../pages/Notifications"
+import { FileManagement } from "../pages/FileManagement"
+import { Reports } from "../pages/Reports"
+import { FeedbackManagement } from "../pages/FeedbackManagement"
+import { SystemSettings } from "../pages/SystemSettings"
+import { SecurityCenter } from "../pages/SecurityCenter"
+
+export const router = createBrowserRouter([
+  {
+    path: "/",
+    element: <PublicLayout />,
+    children: [
+      { index: true, element: <PublicRoute><Home /></PublicRoute> },
+      { path: "events", element: <Events /> },
+      { path: "events/:id", element: <EventDetail /> },
+      { path: "about", element: <PublicRoute><About /></PublicRoute> },
+      { path: "contact", element: <PublicRoute><Contact /></PublicRoute> },
+      { path: "login", element: <Login /> },
+      { path: "register", element: <Register /> },
+      { path: "forgot-password", element: <ForgotPassword /> },
+      { path: "reset-password", element: <ResetPassword /> },
+    ],
+  },
+  {
+    path: "/dashboard",
+    element: (
+      <ProtectedRoute>
+        <AppLayout />
+      </ProtectedRoute>
+    ),
+    children: [
+      { index: true, element: <Dashboard /> },
+      { path: "admin/users", element: <ProtectedRoute roles={["admin"]}><UserManagement /></ProtectedRoute> },
+      { path: "admin/users/:id", element: <ProtectedRoute roles={["admin"]}><UserDetail /></ProtectedRoute> },
+      { path: "admin/categories", element: <ProtectedRoute roles={["admin"]}><CategoryManagement /></ProtectedRoute> },
+      { path: "admin/venues", element: <ProtectedRoute roles={["admin"]}><VenueManagement /></ProtectedRoute> },
+      { path: "admin/files", element: <ProtectedRoute roles={["admin"]}><FileManagement /></ProtectedRoute> },
+      { path: "admin/reports", element: <ProtectedRoute roles={["admin"]}><Reports /></ProtectedRoute> },
+      { path: "admin/settings", element: <ProtectedRoute roles={["admin"]}><SystemSettings /></ProtectedRoute> },
+      { path: "admin/security", element: <ProtectedRoute roles={["admin"]}><SecurityCenter /></ProtectedRoute> },
+      { path: "feedback", element: <ProtectedRoute roles={["organizer", "admin"]}><FeedbackManagement /></ProtectedRoute> },
+      { path: "events", element: <ProtectedRoute roles={["organizer", "admin"]}><EventManagement /></ProtectedRoute> },
+      { path: "events/new", element: <ProtectedRoute roles={["organizer", "admin"]}><EventForm /></ProtectedRoute> },
+      { path: "events/:id/edit", element: <ProtectedRoute roles={["organizer", "admin"]}><EventForm /></ProtectedRoute> },
+      { path: "events/:eventId/schedule", element: <ProtectedRoute roles={["organizer", "admin"]}><ScheduleManagement /></ProtectedRoute> },
+      { path: "events/:eventId/registrations", element: <ProtectedRoute roles={["organizer", "admin"]}><RegistrationManagement /></ProtectedRoute> },
+      { path: "events/:eventId/attendance", element: <ProtectedRoute roles={["organizer", "admin"]}><AttendanceManagement /></ProtectedRoute> },
+      { path: "events/:eventId/invitations", element: <ProtectedRoute roles={["organizer", "admin"]}><InvitationManagement /></ProtectedRoute> },
+      { path: "profile", element: <Profile /> },
+      { path: "tickets/:id", element: <TicketDetail /> },
+      { path: "notifications", element: <Notifications /> },
+    ],
+  },
+  {
+    path: "*",
+    element: <Navigate to="/" replace />,
+  },
+])
