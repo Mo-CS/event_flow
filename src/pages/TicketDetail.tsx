@@ -1,9 +1,10 @@
 import { useState, useEffect } from "react"
-import { useParams, Link } from "react-router-dom"
+import { useParams, Link, useNavigate } from "react-router-dom"
 import { ArrowLeft, Download, CheckCircle, AlertCircle } from "lucide-react"
 import { toast } from "sonner"
-import { getTicketById, downloadTicket } from "../services/ticketService"
+import { getTicketForOwner, downloadTicket } from "../services/ticketService"
 import { getEventById, getAllRegistrations } from "../services/eventService"
+import { useAuth } from "../contexts/AuthContext"
 import { Button } from "../components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Badge } from "../components/ui/badge"
@@ -13,6 +14,8 @@ import QRCode from "qrcode"
 
 export function TicketDetail() {
   const { id } = useParams<{ id: string }>()
+  const { profile } = useAuth()
+  const navigate = useNavigate()
   const [ticket, setTicket] = useState<Ticket | null>(null)
   const [event, setEvent] = useState<Event | null>(null)
   const [qrCodeUrl, setQrCodeUrl] = useState("")
@@ -21,7 +24,16 @@ export function TicketDetail() {
   useEffect(() => {
     if (!id) return
     ;(async () => {
-      const t = await getTicketById(id)
+      if (!profile) {
+        navigate("/login")
+        return
+      }
+      let t: Ticket | null = null
+      try {
+        t = (await getTicketForOwner(id, profile.id)) ?? null
+      } catch {
+        t = null
+      }
       if (!t) { setLoading(false); return }
       setTicket(t)
       if (t.qrCodeUrl) {
@@ -37,7 +49,7 @@ export function TicketDetail() {
       }
       setLoading(false)
     })()
-  }, [id])
+  }, [id, profile, navigate])
 
   const handleDownload = async () => {
     if (!ticket) return
@@ -57,7 +69,6 @@ export function TicketDetail() {
       <Link to="/dashboard" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
         <ArrowLeft size={16} /> Back to Dashboard
       </Link>
-
       <Card className="border-2 border-primary/20">
         <CardHeader className="text-center border-b border-border pb-6">
           <CardTitle className="text-2xl">{event?.title ?? "Event Ticket"}</CardTitle>

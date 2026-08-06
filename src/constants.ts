@@ -35,6 +35,43 @@ export const NOTIFICATION_TYPES = {
   REGISTRATION_CONFIRMATION: "registration_confirmation",
   EVENT_UPDATE: "event_update",
   CHECK_IN: "check_in",
+  CHAT_MESSAGE: "chat_message",
+  INVITATION: "invitation",
+  INVITATION_USED: "invitation_used",
+  WAITLIST_PROMOTION: "waitlist_promotion",
+  EVALUATION: "evaluation",
+} as const
+
+export const EVENT_TYPES = {
+  IN_PERSON: "in_person",
+  ONLINE: "online",
+} as const
+
+export const COST_TYPES = {
+  PLANNED: "planned",
+  ACTUAL: "actual",
+} as const
+
+export const COST_NEED_TYPES = [
+  "catering",
+  "cleaning",
+  "furniture",
+  "technology",
+  "decoration",
+  "printing",
+  "transport",
+  "security",
+  "other",
+] as const
+
+export const RATING_TYPES = {
+  NUMERIC: "numeric",
+  STARS: "stars",
+} as const
+
+export const EVALUATION_PRIVACY = {
+  SECRET: "secret",
+  PUBLIC: "public",
 } as const
 
 export const MOCK_DELAY = {

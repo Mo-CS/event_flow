@@ -31,27 +31,36 @@ export function RegistrationManagement() {
   const fetch = useCallback(async () => {
     if (!eventId) return
     setLoading(true)
-    const event = await getEventById(eventId)
-    if (!event) { navigate("/dashboard/events"); return }
-    if (event.organizerId !== profile?.id && role !== "admin") { navigate("/dashboard/events"); return }
-    setEventTitle(event.title)
-    const regs = await getRegistrations(eventId)
-    const sorted = regs.sort((a, b) => new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime())
-    setRegistrations(sorted)
-    const attendeeIds = [...new Set(sorted.map((r) => r.attendeeId))]
-    if (attendeeIds.length > 0) {
-      const profs = await getProfilesByIds(attendeeIds)
-      setProfileMap(new Map(profs.map((p: any) => [p.id, p])))
+    try {
+      const event = await getEventById(eventId)
+      if (!event) { navigate("/dashboard/events"); return }
+      if (event.organizerId !== profile?.id && role !== "admin") { navigate("/dashboard/events"); return }
+      setEventTitle(event.title)
+      const regs = await getRegistrations(eventId)
+      const sorted = regs.sort((a, b) => new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime())
+      setRegistrations(sorted)
+      const attendeeIds = [...new Set(sorted.map((r) => r.attendeeId))]
+      if (attendeeIds.length > 0) {
+        const profs = await getProfilesByIds(attendeeIds)
+        setProfileMap(new Map(profs.map((p: any) => [p.id, p])))
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to load")
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
-  }, [eventId, navigate])
+  }, [eventId, navigate, profile?.id, role])
 
   useEffect(() => { fetch() }, [fetch])
 
   const handleCancel = async (reg: Registration) => {
-    await cancelRegistration(reg.id)
-    toast.success("Registration cancelled")
-    fetch()
+    try {
+      await cancelRegistration(reg.id)
+      toast.success("Registration cancelled")
+      fetch()
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to cancel registration")
+    }
   }
 
   if (loading) return <Loading text="Loading registrations..." />

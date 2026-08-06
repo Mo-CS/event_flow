@@ -1,5 +1,4 @@
 import { useState, useCallback, useRef } from "react"
-import { supabase } from "../../lib/supabase"
 
 const LM_STUDIO_URL = "/lmstudio/v1/chat/completions"
 

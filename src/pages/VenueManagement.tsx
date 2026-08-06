@@ -38,8 +38,8 @@ function VenueForm({ venue, onClose }: { venue?: Venue; onClose: () => void }) {
         toast.success("Venue created")
       }
       onClose()
-    } catch {
-      toast.error("Something went wrong")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong")
     } finally {
       setSaving(false)
     }
@@ -95,9 +95,14 @@ export function VenueManagement() {
 
   const fetch = useCallback(async () => {
     setLoading(true)
-    const data = await getVenues()
-    setItems(data)
-    setLoading(false)
+    try {
+      const data = await getVenues()
+      setItems(data)
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to load")
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
@@ -107,9 +112,13 @@ export function VenueManagement() {
   )
 
   const handleDelete = async (v: Venue) => {
-    await deleteVenue(v.id)
-    toast.success(`"${v.name}" deleted`)
-    fetch()
+    try {
+      await deleteVenue(v.id)
+      toast.success(`"${v.name}" deleted`)
+      fetch()
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to delete venue")
+    }
   }
 
   return (

@@ -34,6 +34,34 @@ export async function createLink(eventId: string, email: string): Promise<Invita
   return mapLink(data)
 }
 
+export async function createLinksBulk(eventId: string, emails: string[]): Promise<InvitationLink[]> {
+  const uniqueEmails = [...new Set(emails.map((e) => e.trim().toLowerCase()).filter(Boolean))]
+  if (uniqueEmails.length === 0) return []
+
+  // Avoid duplicates with existing links for the same event
+  const { data: existing } = await supabase
+    .from("invitation_links")
+    .select("email")
+    .eq("event_id", eventId)
+  const existingEmails = new Set((existing ?? []).map((l) => l.email.toLowerCase()))
+
+  const toInsert = uniqueEmails.filter((e) => !existingEmails.has(e))
+  if (toInsert.length === 0) return []
+
+  const rows = toInsert.map((email) => ({
+    event_id: eventId,
+    email,
+    code: crypto.randomUUID().replace(/-/g, "").slice(0, 12),
+  }))
+
+  const { data, error } = await supabase
+    .from("invitation_links")
+    .insert(rows)
+    .select()
+  if (error) throw error
+  return (data ?? []).map(mapLink)
+}
+
 export async function deleteLink(id: string): Promise<boolean> {
   const { error } = await supabase.from("invitation_links").delete().eq("id", id)
   if (error) throw error

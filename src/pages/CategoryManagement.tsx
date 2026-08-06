@@ -33,8 +33,8 @@ function CategoryForm({ category, onClose }: { category?: Category; onClose: () 
         toast.success("Category created")
       }
       onClose()
-    } catch {
-      toast.error("Something went wrong")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong")
     } finally {
       setSaving(false)
     }
@@ -87,9 +87,14 @@ export function CategoryManagement() {
 
   const fetch = useCallback(async () => {
     setLoading(true)
-    const data = await getCategories()
-    setItems(data)
-    setLoading(false)
+    try {
+      const data = await getCategories()
+      setItems(data)
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to load")
+    } finally {
+      setLoading(false)
+    }
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
@@ -99,9 +104,13 @@ export function CategoryManagement() {
   )
 
   const handleDelete = async (cat: Category) => {
-    await deleteCategory(cat.id)
-    toast.success(`"${cat.name}" deleted`)
-    fetch()
+    try {
+      await deleteCategory(cat.id)
+      toast.success(`"${cat.name}" deleted`)
+      fetch()
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to delete category")
+    }
   }
 
   const openCreate = () => {

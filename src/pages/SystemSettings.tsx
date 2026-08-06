@@ -17,30 +17,48 @@ export function SystemSettings() {
   const [saving, setSaving] = useState("")
 
   useEffect(() => {
-    getSettings().then((s) => { setSettings(s); setLoading(false) })
+    getSettings().then((s) => { setSettings(s); setLoading(false) }).catch((e: any) => {
+      toast.error(e?.message ?? "Failed to load settings")
+      setLoading(false)
+    })
   }, [])
 
   const handleSaveGeneral = async () => {
     if (!settings) return
     setSaving("general")
-    await updateSettings({ appName: settings.appName, timezone: settings.timezone, dateFormat: settings.dateFormat })
-    toast.success("General settings saved")
-    setSaving("")
+    try {
+      await updateSettings({ appName: settings.appName, timezone: settings.timezone, dateFormat: settings.dateFormat })
+      toast.success("General settings saved")
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save general settings")
+    } finally {
+      setSaving("")
+    }
   }
 
   const handleSaveBranding = async () => {
     if (!settings) return
     setSaving("branding")
-    await updateSettings({ primaryColor: settings.primaryColor, logoUrl: settings.logoUrl, faviconUrl: settings.faviconUrl })
-    toast.success("Branding settings saved")
-    setSaving("")
+    try {
+      await updateSettings({ primaryColor: settings.primaryColor, logoUrl: settings.logoUrl, faviconUrl: settings.faviconUrl })
+      toast.success("Branding settings saved")
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save branding settings")
+    } finally {
+      setSaving("")
+    }
   }
 
   const handleSaveTemplate = async (tmpl: EmailTemplate) => {
     setSaving(tmpl.id)
-    await updateEmailTemplate(tmpl.id, { subject: tmpl.subject, body: tmpl.body })
-    toast.success(`Template "${tmpl.type}" saved`)
-    setSaving("")
+    try {
+      await updateEmailTemplate(tmpl.id, { subject: tmpl.subject, body: tmpl.body })
+      toast.success(`Template "${tmpl.type}" saved`)
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save template")
+    } finally {
+      setSaving("")
+    }
   }
 
   if (loading) return <Loading text="Loading settings..." />

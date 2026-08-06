@@ -9,6 +9,7 @@ function mapNotification(n: Record<string, any>): Notification {
     message: n.message,
     readAt: n.read_at ?? null,
     createdAt: n.created_at,
+    link: n.link ?? undefined,
   }
 }
 
@@ -51,10 +52,11 @@ export async function sendNotification(
   userId: string,
   type: NotificationType,
   message: string,
+  link?: string,
 ): Promise<Notification> {
   const { data, error } = await supabase
     .from("notifications")
-    .insert({ user_id: userId, type, message })
+    .insert({ user_id: userId, type, message, link })
     .select()
     .single()
   if (error) throw error

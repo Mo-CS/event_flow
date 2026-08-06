@@ -1,51 +1,278 @@
 import { supabase } from "../lib/supabase"
 
 export async function getReportData() {
-  const { data: events } = await supabase.from("events").select("id, title, category_id")
-  const { data: registrations } = await supabase.from("registrations").select("event_id, status, registered_at")
-  const { data: categories } = await supabase.from("categories").select("id, name")
-  const { data: feedbacks } = await supabase.from("feedback").select("rating")
+  const [events, registrations, categories, feedbacks, users, profiles, venues, tickets, attendance, costs, evaluations] =
+    await Promise.all([
+      supabase.from("events").select("id, title, status, capacity, category_id, venue_id, event_type, start_date, end_date").order("start_date"),
+      supabase.from("registrations").select("id, event_id, attendee_id, status, registered_at"),
+      supabase.from("categories").select("id, name"),
+      supabase.from("feedback").select("id, event_id, rating, submitted_at"),
+      supabase.from("users").select("id, email, suspended, created_at"),
+      supabase.from("profiles").select("id, user_id, first_name, last_name, role_id, role:roles(name)"),
+      supabase.from("venues").select("id, name"),
+      supabase.from("tickets").select("id, registration_id, status"),
+      supabase.from("attendance").select("id, ticket_id, check_in_time"),
+      supabase.from("event_costs").select("event_id, cost_type, need_type, quantity, unit_price"),
+      supabase.from("evaluations").select("id, event_id, rating_type"),
+    ])
 
-  const totalEvents = events?.length ?? 0
-  const totalRegs = registrations?.length ?? 0
-  const confirmedRegs = registrations?.filter((r) => r.status === "confirmed").length ?? 0
-  const cancelledRegs = registrations?.filter((r) => r.status === "cancelled").length ?? 0
-  const waitlistedRegs = registrations?.filter((r) => r.status === "waitlisted").length ?? 0
+  const evs = (events.data ?? []) as any[]
+  const regs = (registrations.data ?? []) as any[]
+  const cats = (categories.data ?? []) as any[]
+  const fbs = (feedbacks.data ?? []) as any[]
+  const usrs = (users.data ?? []) as any[]
+  const profs = (profiles.data ?? []) as any[]
+  const vens = (venues.data ?? []) as any[]
+  const tks = (tickets.data ?? []) as any[]
+  const atts = (attendance.data ?? []) as any[]
+  const csts = (costs.data ?? []) as any[]
+  const evals = (evaluations.data ?? []) as any[]
 
-  const regByMonth: Record<string, number> = {}
-  for (const r of registrations ?? []) {
-    const m = new Date(r.registered_at).toLocaleString("en-US", { month: "short" })
-    regByMonth[m] = (regByMonth[m] || 0) + 1
+  // ---------- Overview ----------
+  const totalEvents = evs.length
+  const totalUsers = usrs.length
+  const totalRegs = regs.length
+  const confirmedRegs = regs.filter((r) => r.status === "confirmed").length
+  const cancelledRegs = regs.filter((r) => r.status === "cancelled").length
+  const waitlistedRegs = regs.filter((r) => r.status === "waitlisted").length
+  const totalAttendance = atts.length
+  const averageRating = fbs.length > 0
+    ? +(fbs.reduce((s, f) => s + f.rating, 0) / fbs.length).toFixed(1)
+    : 0
+
+  // ---------- Users section ----------
+  const roleNames = ["admin", "organizer", "attendee"]
+  const usersByRole = roleNames.map((name) => ({
+    name,
+    count: profs.filter((p) => p.role?.name === name).length,
+  }))
+
+  const suspendedCount = usrs.filter((u) => u.suspended).length
+
+  // Attendance commitment: users who registered to events they attended vs registered but never attended
+  const profileToUser = new Map(profs.map((p) => [p.id, p.user_id]))
+  const attendanceCountByProfile: Record<string, number> = {}
+  const ticketRegMap = new Map(tks.map((t) => [t.id, t.registration_id]))
+  for (const a of atts) {
+    const regId = ticketRegMap.get(a.ticket_id)
+    if (!regId) continue
+    const reg = regs.find((r) => r.id === regId)
+    if (reg) {
+      attendanceCountByProfile[reg.attendee_id] = (attendanceCountByProfile[reg.attendee_id] ?? 0) + 1
+    }
   }
-  const registrationTrend = Object.entries(regByMonth).map(([month, count]) => ({ month, count }))
+  const attendedProfileIds = new Set(Object.keys(attendanceCountByProfile))
 
-  const catMap = Object.fromEntries((categories ?? []).map((c) => [c.id, c.name]))
-  const regByCategory: Record<string, number> = {}
-  for (const reg of registrations ?? []) {
-    const ev = events?.find((e) => e.id === reg.event_id)
-    const name = ev ? (catMap[ev.category_id] ?? "Unknown") : "Unknown"
-    regByCategory[name] = (regByCategory[name] || 0) + 1
+  const activeAttendees = new Set(profs.filter((p) => p.role?.name === "attendee").map((p) => p.id))
+  let attendedCount = 0
+  let noShowCount = 0
+  const attendeeSet = new Set<string>()
+  for (const r of regs) {
+    if (r.status !== "cancelled" && activeAttendees.has(r.attendee_id)) {
+      attendeeSet.add(r.attendee_id)
+    }
   }
-  const categoryBreakdown = Object.entries(regByCategory).map(([name, count]) => ({ name, count }))
+  for (const id of attendeeSet) {
+    if (attendedProfileIds.has(id)) attendedCount++
+    else noShowCount++
+  }
 
-  const eventPopularity = (events ?? [])
+  // Attendance commitment across all registered users (not just attendees)
+  let allRegistered = 0
+  let allAttended = 0
+  for (const r of regs) {
+    if (r.status !== "cancelled") {
+      allRegistered++
+      if (attendedProfileIds.has(r.attendee_id)) allAttended++
+    }
+  }
+
+  const topAttendees = Object.entries(attendanceCountByProfile)
+    .map(([profileId, attended]) => {
+      const prof = profs.find((p) => p.id === profileId)
+      return {
+        profileId,
+        userId: profileToUser.get(profileId),
+        name: prof ? `${prof.first_name} ${prof.last_name}`.trim() || "Unknown" : "Unknown",
+        attended,
+      }
+    })
+    .sort((a, b) => b.attended - a.attended)
+    .slice(0, 10)
+
+  // ---------- Events section ----------
+  const eventPopularity = evs
     .map((e) => ({
+      id: e.id,
       name: e.title,
-      registrations: registrations?.filter((r) => r.event_id === e.id && r.status !== "cancelled").length ?? 0,
+      registrations: regs.filter((r) => r.event_id === e.id && r.status !== "cancelled").length,
     }))
     .sort((a, b) => b.registrations - a.registrations)
 
-  const averageRating =
-    feedbacks && feedbacks.length > 0
-      ? feedbacks.reduce((s, f) => s + f.rating, 0) / feedbacks.length
-      : 0
+  const attendanceRateByEvent = evs.map((e) => {
+    const eventRegs = regs.filter((r) => r.event_id === e.id && r.status !== "cancelled")
+    const eventTickets = eventRegs
+      .map((r) => tks.find((t) => t.registration_id === r.id))
+      .filter(Boolean)
+    const attended = eventTickets.filter((t) => atts.some((a) => a.ticket_id === t.id)).length
+    const eventAll = regs.filter((r) => r.event_id === e.id)
+    return {
+      id: e.id,
+      name: e.title,
+      status: e.status,
+      registered: eventRegs.length,
+      confirmed: eventAll.filter((r) => r.status === "confirmed").length,
+      cancelled: eventAll.filter((r) => r.status === "cancelled").length,
+      waitlisted: eventAll.filter((r) => r.status === "waitlisted").length,
+      attended,
+      rate: eventRegs.length > 0 ? Math.round((attended / eventRegs.length) * 100) : 0,
+      fillRate: e.capacity > 0 ? Math.round((eventRegs.length / e.capacity) * 100) : 0,
+    }
+  })
+
+  const eventsByStatus = ["draft", "published", "archived"].map((s) => ({
+    name: s,
+    count: evs.filter((e) => e.status === s).length,
+  }))
+
+  // ---------- Attendance section ----------
+  const onlineEvents = evs.filter((e) => e.event_type === "online")
+  const inPersonEvents = evs.filter((e) => e.event_type === "in_person")
+  const attendanceByType = [
+    { name: "In-Person", value: countAttendanceForEvents(inPersonEvents, regs, tks, atts) },
+    { name: "Online", value: countAttendanceForEvents(onlineEvents, regs, tks, atts) },
+  ]
+
+  // ---------- Feedback / evaluation ----------
+  const ratingDistMap: Record<string, number> = {}
+  for (const f of fbs) {
+    const key = String(f.rating)
+    ratingDistMap[key] = (ratingDistMap[key] ?? 0) + 1
+  }
+  const ratingDistribution = Object.entries(ratingDistMap)
+    .map(([label, count]) => ({ label, count }))
+    .sort((a, b) => Number(a.label) - Number(b.label))
+
+  const avgRatingByEvent = evs
+    .map((e) => {
+      const eventFb = fbs.filter((f) => f.event_id === e.id)
+      return {
+        id: e.id,
+        name: e.title,
+        count: eventFb.length,
+        average: eventFb.length > 0
+          ? +(eventFb.reduce((s, f) => s + f.rating, 0) / eventFb.length).toFixed(1)
+          : 0,
+      }
+    })
+    .filter((e) => e.count > 0)
+    .sort((a, b) => b.average - a.average)
+
+  // ---------- Costs section ----------
+  const costsByEvent = evs.map((e) => {
+    const planned = csts.filter((c) => c.event_id === e.id && c.cost_type === "planned")
+    const actual = csts.filter((c) => c.event_id === e.id && c.cost_type === "actual")
+    const plannedTotal = planned.reduce((s, c) => s + Number(c.quantity) * Number(c.unit_price), 0)
+    const actualTotal = actual.reduce((s, c) => s + Number(c.quantity) * Number(c.unit_price), 0)
+    return {
+      id: e.id,
+      name: e.title,
+      planned: plannedTotal,
+      actual: actualTotal,
+      difference: plannedTotal - actualTotal,
+    }
+  })
+  const totalPlannedCosts = csts.filter((c) => c.cost_type === "planned")
+    .reduce((s, c) => s + Number(c.quantity) * Number(c.unit_price), 0)
+  const totalActualCosts = csts.filter((c) => c.cost_type === "actual")
+    .reduce((s, c) => s + Number(c.quantity) * Number(c.unit_price), 0)
+
+  const needTypeDist: Record<string, number> = {}
+  for (const c of csts) {
+    needTypeDist[c.need_type] = (needTypeDist[c.need_type] ?? 0) + 1
+  }
+
+  // ---------- Categories & venues ----------
+  const categoryBreakdown = cats
+    .map((c) => ({
+      name: c.name,
+      count: evs.filter((e) => e.category_id === c.id).length,
+    }))
+    .filter((c) => c.count > 0)
+
+  const venueBreakdown = vens
+    .map((v) => ({
+      name: v.name,
+      count: evs.filter((e) => e.venue_id === v.id).length,
+    }))
+    .filter((v) => v.count > 0)
+
+  // ---------- Registration trend ----------
+  // Grouped by year-month so the same month in different years stays
+  // separate (فصل الأشهر), and sorted chronologically.
+  const regByMonth: Record<string, number> = {}
+  for (const r of regs) {
+    const d = new Date(r.registered_at)
+    const key = `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, "0")}`
+    regByMonth[key] = (regByMonth[key] || 0) + 1
+  }
+  const registrationTrend = Object.entries(regByMonth)
+    .sort(([a], [b]) => a.localeCompare(b))
+    .map(([key, count]) => {
+      const [year, month] = key.split("-")
+      const label = new Date(Number(year), Number(month) - 1, 1).toLocaleString("en-US", { month: "short", year: "numeric" })
+      return { key, month: label, count }
+    })
+
+  const statusPie = [
+    { name: "Confirmed", value: confirmedRegs },
+    { name: "Cancelled", value: cancelledRegs },
+    { name: "Waitlisted", value: waitlistedRegs },
+  ].filter((d) => d.value > 0)
 
   return {
-    summary: { totalEvents, totalRegs, confirmedRegs, cancelledRegs, waitlistedRegs, averageRating: +averageRating.toFixed(1) },
+    summary: {
+      totalEvents, totalUsers, totalRegs, confirmedRegs, cancelledRegs, waitlistedRegs,
+      totalAttendance, averageRating,
+      totalPlannedCosts, totalActualCosts,
+    },
     registrationTrend,
+    statusPie,
     categoryBreakdown,
+    venueBreakdown,
     eventPopularity,
+    eventsByStatus,
+    usersByRole,
+    suspendedCount,
+    attendanceCommitment: { attended: attendedCount, noShow: noShowCount, allRegistered, allAttended },
+    topAttendees,
+    attendanceRateByEvent,
+    attendanceByType,
+    ratingDistribution,
+    avgRatingByEvent,
+    costsByEvent,
+    needTypeDist,
+    events: evs,
+    venues: vens,
+    categories: cats,
+    evaluations: evals,
   }
+}
+
+function countAttendanceForEvents(
+  eventList: any[],
+  regs: any[],
+  tks: any[],
+  atts: any[],
+): number {
+  let count = 0
+  const eventIds = new Set(eventList.map((e) => e.id))
+  const eventRegs = regs.filter((r) => eventIds.has(r.event_id))
+  for (const t of tks) {
+    const reg = eventRegs.find((r) => r.id === t.registration_id)
+    if (reg && atts.some((a) => a.ticket_id === t.id)) count++
+  }
+  return count
 }
 
 export function exportToCsv(data: Record<string, any>[], filename: string) {

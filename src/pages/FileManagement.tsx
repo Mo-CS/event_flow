@@ -26,14 +26,19 @@ export function FileManagement() {
 
   const fetch = useCallback(async () => {
     setLoading(true)
-    const data = await getFiles()
-    setFileList(data)
-    const uploaderIds = [...new Set(data.map((f) => f.uploadedBy))]
-    if (uploaderIds.length > 0) {
-      const profs = await getProfilesByIds(uploaderIds)
-      setProfileMap(new Map(profs.map((p: any) => [p.id, p])))
+    try {
+      const data = await getFiles()
+      setFileList(data)
+      const uploaderIds = [...new Set(data.map((f) => f.uploadedBy))]
+      if (uploaderIds.length > 0) {
+        const profs = await getProfilesByIds(uploaderIds)
+        setProfileMap(new Map(profs.map((p: any) => [p.id, p])))
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to load")
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [])
 
   useEffect(() => { fetch() }, [fetch])
@@ -41,19 +46,28 @@ export function FileManagement() {
   const handleUpload = async () => {
     if (!selectedFile || !profile) return
     setUploading(true)
-    await uploadFile(selectedFile.name, selectedFile.type, selectedFile.size, profile.id)
-    toast.success(`"${selectedFile.name}" uploaded`)
-    setUploading(false)
-    setUploadOpen(false)
-    setSelectedFile(null)
-    if (fileRef.current) fileRef.current.value = ""
-    fetch()
+    try {
+      await uploadFile(selectedFile.name, selectedFile.type, selectedFile.size, profile.id)
+      toast.success(`"${selectedFile.name}" uploaded`)
+      setUploadOpen(false)
+      setSelectedFile(null)
+      if (fileRef.current) fileRef.current.value = ""
+      fetch()
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to upload file")
+    } finally {
+      setUploading(false)
+    }
   }
 
   const handleDelete = async (file: FileItem) => {
-    await deleteFile(file.id)
-    toast.success(`"${file.name}" deleted`)
-    fetch()
+    try {
+      await deleteFile(file.id)
+      toast.success(`"${file.name}" deleted`)
+      fetch()
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to delete file")
+    }
   }
 
   const handleDownload = (file: FileItem) => {

@@ -7,10 +7,10 @@ import { LogIn } from "lucide-react"
 export function Login() {
   const { login, isLoading, isAuthenticated } = useAuth()
   const navigate = useNavigate()
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

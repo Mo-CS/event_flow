@@ -50,6 +50,23 @@ export async function getTicketById(id: string): Promise<Ticket | undefined> {
   return data ? mapTicket(data) : undefined
 }
 
+/**
+ * Loads a ticket only when it belongs to the given attendee profile (confirmed registration),
+ * otherwise returns undefined. Used to keep the ticket page from leaking others' tickets.
+ */
+export async function getTicketForOwner(id: string, attendeeProfileId: string): Promise<Ticket | undefined> {
+  const { data: ticket, error } = await supabase
+    .from("tickets")
+    .select("*, registration:registrations(attendee_id, status)")
+    .eq("id", id)
+    .single()
+  if (error) throw error
+  if (!ticket) return undefined
+  const reg = (ticket as any).registration
+  if (!reg || reg.attendee_id !== attendeeProfileId || reg.status !== "confirmed") return undefined
+  return mapTicket(ticket)
+}
+
 export async function getTicketsByIds(ids: string[]): Promise<Ticket[]> {
   if (ids.length === 0) return []
   const { data, error } = await supabase

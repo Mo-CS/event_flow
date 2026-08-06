@@ -2,6 +2,7 @@ import { Outlet, Link, useLocation } from "react-router-dom"
 import { Toaster } from "../ui/toaster"
 import { useAuth } from "../../contexts/AuthContext"
 import { useTheme } from "../../contexts/ThemeContext"
+import { usePageTitle } from "../../lib/usePageTitle"
 import { Moon, Sun } from "lucide-react"
 import ChatWidget from "../chat/ChatWidget"
 
@@ -9,6 +10,7 @@ export function PublicLayout() {
   const { isAuthenticated, profile, role } = useAuth()
   const { theme, toggleTheme } = useTheme()
   const location = useLocation()
+  usePageTitle(location.pathname)
 
   const isOrganizerOrAdmin = role === "organizer" || role === "admin"
 

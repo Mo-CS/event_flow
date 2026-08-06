@@ -28,7 +28,7 @@ function SessionForm({ eventId, session, onClose }: { eventId: string; session?:
   useEffect(() => {
     if (!startTime || !endTime) { setConflicts([]); return }
     const timer = setTimeout(async () => {
-      const result = await detectConflicts(eventId, new Date(startTime).toISOString(), new Date(endTime).toISOString(), session?.id)
+      const result = await detectConflicts(eventId, new Date(startTime).toISOString(), new Date(endTime).toISOString(), session?.id).catch(() => [])
       setConflicts(result)
     }, 300)
     return () => clearTimeout(timer)
@@ -54,8 +54,8 @@ function SessionForm({ eventId, session, onClose }: { eventId: string; session?:
         toast.success("Session created")
       }
       onClose()
-    } catch {
-      toast.error("Something went wrong")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong")
     } finally {
       setSaving(false)
     }
@@ -125,8 +125,8 @@ function SpeakerForm({ sessionId, speaker, onClose }: { sessionId: string; speak
         toast.success("Speaker added")
       }
       onClose()
-    } catch {
-      toast.error("Something went wrong")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Something went wrong")
     } finally {
       setSaving(false)
     }
@@ -171,17 +171,22 @@ export function ScheduleManagement() {
   const fetch = useCallback(async () => {
     if (!eventId) return
     setLoading(true)
-    const event = await getEventById(eventId)
-    if (!event) { navigate("/dashboard/events"); return }
-    if (event.organizerId !== profile?.id && role !== "admin") { navigate("/dashboard/events"); return }
-    setEventTitle(event.title)
-    const sess = await getSessionsByEvent(eventId)
-    setSessions(sess)
-    const map: Record<string, Speaker[]> = {}
-    for (const s of sess) { map[s.id] = await getSpeakersBySession(s.id) }
-    setSpeakersMap(map)
-    setLoading(false)
-  }, [eventId, navigate])
+    try {
+      const event = await getEventById(eventId)
+      if (!event) { navigate("/dashboard/events"); return }
+      if (event.organizerId !== profile?.id && role !== "admin") { navigate("/dashboard/events"); return }
+      setEventTitle(event.title)
+      const sess = await getSessionsByEvent(eventId)
+      setSessions(sess)
+      const map: Record<string, Speaker[]> = {}
+      for (const s of sess) { map[s.id] = await getSpeakersBySession(s.id) }
+      setSpeakersMap(map)
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to load")
+    } finally {
+      setLoading(false)
+    }
+  }, [eventId, navigate, profile?.id, role])
 
   useEffect(() => { fetch() }, [fetch])
 
@@ -216,7 +221,15 @@ export function ScheduleManagement() {
                   </div>
                   <div className="flex gap-1">
                     <Button size="sm" variant="ghost" onClick={() => { setEditingSession(session); setSessionDialog(true) }}><Pencil size={14} /></Button>
-                    <Button size="sm" variant="ghost" className="text-destructive" onClick={async () => { await deleteSession(session.id); toast.success("Session deleted"); fetch() }}><Trash2 size={14} /></Button>
+                    <Button size="sm" variant="ghost" className="text-destructive" onClick={async () => {
+                      try {
+                        await deleteSession(session.id)
+                        toast.success("Session deleted")
+                        fetch()
+                      } catch (e: any) {
+                        toast.error(e?.message ?? "Failed to delete session")
+                      }
+                    }}><Trash2 size={14} /></Button>
                   </div>
                 </CardHeader>
                 {session.description && <CardContent className="pt-0">
@@ -239,7 +252,15 @@ export function ScheduleManagement() {
                           </div>
                           <div className="flex gap-1">
                             <Button size="sm" variant="ghost" onClick={() => { setSpeakerDialog(session.id); setEditingSpeaker(speaker) }}><Pencil size={12} /></Button>
-                            <Button size="sm" variant="ghost" className="text-destructive" onClick={async () => { await deleteSpeaker(speaker.id); toast.success("Speaker removed"); fetch() }}><Trash2 size={12} /></Button>
+                            <Button size="sm" variant="ghost" className="text-destructive" onClick={async () => {
+                              try {
+                                await deleteSpeaker(speaker.id)
+                                toast.success("Speaker removed")
+                                fetch()
+                              } catch (e: any) {
+                                toast.error(e?.message ?? "Failed to remove speaker")
+                              }
+                            }}><Trash2 size={12} /></Button>
                           </div>
                         </div>
                       ))}

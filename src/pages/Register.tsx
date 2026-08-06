@@ -7,12 +7,12 @@ import { UserPlus } from "lucide-react"
 export function Register() {
   const { register, isLoading, isAuthenticated } = useAuth()
   const navigate = useNavigate()
-  if (isAuthenticated) return <Navigate to="/dashboard" replace />
   const [firstName, setFirstName] = useState("")
   const [lastName, setLastName] = useState("")
   const [email, setEmail] = useState("")
   const [password, setPassword] = useState("")
   const [error, setError] = useState("")
+  if (isAuthenticated) return <Navigate to="/dashboard" replace />
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()

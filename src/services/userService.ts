@@ -32,6 +32,7 @@ function mapUser(row: Record<string, any>): UserWithProfile {
           phoneNumber: p.phone_number,
           avatarUrl: p.avatar_url,
           roleId: p.role_id,
+          managesAllEvents: p.manages_all_events ?? false,
         }
       : undefined,
     roleName: p?.role?.name as RoleName | undefined,
@@ -47,7 +48,7 @@ export async function getUsers(params: {
 }): Promise<PaginatedResult<UserWithProfile>> {
   let query = supabase
     .from("users")
-    .select("*, profile:profiles(*, role:roles(*))", { count: "exact" })
+    .select("id, email, created_at, updated_at, suspended, profile:profiles(*, role:roles(*))", { count: "exact" })
 
   if (params.search) {
     const q = `%${params.search.toLowerCase()}%`
@@ -93,7 +94,7 @@ export async function getUsers(params: {
 export async function getUserById(id: string): Promise<UserWithProfile | undefined> {
   const { data, error } = await supabase
     .from("users")
-    .select("*, profile:profiles(*, role:roles(*))")
+    .select("id, email, created_at, updated_at, suspended, profile:profiles(*, role:roles(*))")
     .eq("id", id)
     .single()
   if (error) throw error
@@ -176,12 +177,17 @@ export async function createUser(data: {
     .single()
   if (!roleRow) throw new Error("Role not found")
 
-  const { data: user, error: userError } = await supabase
+  const { error: userError } = await supabase
     .from("users")
     .insert({ email: data.email, password_hash: passwordHash })
-    .select()
-    .single()
   if (userError) throw userError
+
+  const { data: user } = await supabase
+    .from("users")
+    .select("id, email, created_at, updated_at, suspended")
+    .eq("email", data.email)
+    .single()
+  if (!user) throw new Error("User not found")
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -241,9 +247,28 @@ export async function getProfilesByIds(ids: string[]) {
   }))
 }
 
+export async function getProfilesByUserIds(ids: string[]) {
+  if (ids.length === 0) return []
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("*, user:users(email)")
+    .in("user_id", ids)
+  if (error) throw error
+  return (data ?? []).map((p: any) => ({
+    id: p.id,
+    userId: p.user_id,
+    firstName: p.first_name,
+    lastName: p.last_name,
+    phoneNumber: p.phone_number,
+    avatarUrl: p.avatar_url,
+    roleId: p.role_id,
+    email: p.user?.email ?? "",
+  }))
+}
+
 export async function getUsersByIds(ids: string[]) {
   if (ids.length === 0) return []
-  const { data, error } = await supabase.from("users").select("*").in("id", ids)
+  const { data, error } = await supabase.from("users").select("id, email, created_at, updated_at, suspended").in("id", ids)
   if (error) throw error
   return (data ?? []).map((u: any) => ({
     id: u.id,
@@ -251,5 +276,60 @@ export async function getUsersByIds(ids: string[]) {
     createdAt: u.created_at,
     updatedAt: u.updated_at,
     suspended: u.suspended ?? undefined,
+  }))
+}
+
+export async function getUserByEmail(email: string): Promise<UserWithProfile | undefined> {
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, email, created_at, updated_at, suspended, profile:profiles(*, role:roles(*))")
+    .eq("email", email)
+    .maybeSingle()
+  if (error) throw error
+  return data ? mapUser(data) : undefined
+}
+
+export async function getAttendeeProfiles(): Promise<{ id: string; userId: string; firstName: string; lastName: string; email: string }[]> {
+  const { data: roles } = await supabase.from("roles").select("id, name").eq("name", "attendee")
+  if (!roles || roles.length === 0) return []
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, user_id, first_name, last_name, user:users(email)")
+    .eq("role_id", roles[0].id)
+    .order("first_name")
+  if (error) throw error
+  return (data ?? []).map((p: any) => ({
+    id: p.id,
+    userId: p.user_id,
+    firstName: p.first_name,
+    lastName: p.last_name,
+    email: p.user?.email ?? "",
+  }))
+}
+
+export interface InviteUser {
+  id: string
+  email: string
+  firstName: string
+  lastName: string
+  roleName: string
+}
+
+export async function getAllUsersForInvite(): Promise<InviteUser[]> {
+  const { data: roles } = await supabase.from("roles").select("id").eq("name", "attendee")
+  if (!roles || roles.length === 0) return []
+
+  const { data, error } = await supabase
+    .from("users")
+    .select("id, email, profile:profiles(first_name, last_name, role:roles(name))")
+    .eq("profile.role_id", roles[0].id)
+    .order("email")
+  if (error) throw error
+  return (data ?? []).map((u: any) => ({
+    id: u.id,
+    email: u.email,
+    firstName: u.profile?.first_name ?? "",
+    lastName: u.profile?.last_name ?? "",
+    roleName: u.profile?.role?.name ?? "attendee",
   }))
 }

@@ -1,13 +1,13 @@
 import { useState, useEffect, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
-import { Plus, Pencil, Trash2, Copy, Archive, Eye, Calendar, MapPin, Users, Send, RotateCcw, ListOrdered, ClipboardList, ScanLine, UserPlus } from "lucide-react"
+import { Plus, Pencil, Trash2, Copy, Archive, Eye, Calendar, MapPin, Users, Send, RotateCcw, ListOrdered, ClipboardList, ScanLine, UserPlus, Wallet, ClipboardCheck, MessageSquare, ShieldCheck } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
 import { Loading } from "../components/ui/Loading"
 import { EmptyState } from "../components/ui/EmptyState"
 import { useAuth } from "../contexts/AuthContext"
-import { getEventsByOrganizer, deleteEvent, duplicateEvent, publishEvent, archiveEvent, setDraft } from "../services/eventService"
+import { getEventsForUser, deleteEvent, duplicateEvent, publishEvent, archiveEvent, setDraft } from "../services/eventService"
 import { getVenues } from "../services/venueService"
 import type { Event, Venue } from "../types"
 
@@ -18,20 +18,23 @@ const statusColors: Record<string, "default" | "secondary" | "outline" | "destru
 }
 
 export function EventManagement() {
-  const { profile } = useAuth()
+  const { profile, user, role } = useAuth()
   const navigate = useNavigate()
   const [events, setEvents] = useState<Event[]>([])
   const [venues, setVenues] = useState<Venue[]>([])
   const [loading, setLoading] = useState(true)
 
   const fetch = useCallback(async () => {
-    if (!profile) return
+    if (!profile || !user) return
     setLoading(true)
-    const [data, v] = await Promise.all([getEventsByOrganizer(profile.id), getVenues()])
+    const [data, v] = await Promise.all([
+      getEventsForUser(profile.id, user.id, role ?? "attendee", profile.managesAllEvents ?? false),
+      getVenues(),
+    ])
     setEvents(data)
     setVenues(v)
     setLoading(false)
-  }, [profile])
+  }, [profile, user, role])
 
   useEffect(() => { fetch() }, [fetch])
 
@@ -103,6 +106,12 @@ export function EventManagement() {
                 )}
                 <Button size="sm" variant="ghost" onClick={() => navigate(`/dashboard/events/${event.id}/attendance`)}><ScanLine size={14} /> Attendance</Button>
                 <Button size="sm" variant="ghost" onClick={() => navigate(`/dashboard/events/${event.id}/schedule`)}><ListOrdered size={14} /> Schedule</Button>
+                <Button size="sm" variant="ghost" onClick={() => navigate(`/dashboard/events/${event.id}/costs`)}><Wallet size={14} /> Costs</Button>
+                <Button size="sm" variant="ghost" onClick={() => navigate(`/dashboard/events/${event.id}/evaluation`)}><ClipboardCheck size={14} /> Evaluation</Button>
+                <Button size="sm" variant="ghost" onClick={() => navigate(`/dashboard/events/${event.id}/chat`)}><MessageSquare size={14} /> Chat</Button>
+                {role === "admin" && (
+                  <Button size="sm" variant="ghost" onClick={() => navigate(`/dashboard/events/${event.id}/organizers`)}><ShieldCheck size={14} /> Organizers</Button>
+                )}
                 <Button size="sm" variant="ghost" onClick={() => navigate(`/events/${event.id}`)}><Eye size={14} /> View</Button>
                 <Button size="sm" variant="ghost" onClick={() => navigate(`/dashboard/events/${event.id}/edit`)}><Pencil size={14} /> Edit</Button>
                 {event.status === "draft" && (

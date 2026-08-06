@@ -29,29 +29,42 @@ export function UserManagement() {
 
   const fetchUsers = useCallback(async () => {
     setLoading(true)
-    const result = await getUsers({
-      search: filters.search || undefined,
-      role: filters.role || undefined,
-      status: filters.status || undefined,
-      page: filters.page,
-      pageSize: 10,
-    })
-    setData(result)
-    setLoading(false)
+    try {
+      const result = await getUsers({
+        search: filters.search || undefined,
+        role: filters.role || undefined,
+        status: filters.status || undefined,
+        page: filters.page,
+        pageSize: 10,
+      })
+      setData(result)
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to load users")
+    } finally {
+      setLoading(false)
+    }
   }, [filters])
 
   useEffect(() => { fetchUsers() }, [fetchUsers])
 
   const handleSuspend = async (id: string, name: string) => {
-    await suspendUser(id)
-    toast.success(`${name} suspended`)
-    fetchUsers()
+    try {
+      await suspendUser(id)
+      toast.success(`${name} suspended`)
+      fetchUsers()
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to suspend user")
+    }
   }
 
   const handleActivate = async (id: string, name: string) => {
-    await activateUser(id)
-    toast.success(`${name} activated`)
-    fetchUsers()
+    try {
+      await activateUser(id)
+      toast.success(`${name} activated`)
+      fetchUsers()
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to activate user")
+    }
   }
 
   const handleCreate = async () => {

@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { useParams, Link, useSearchParams } from "react-router-dom"
-import { Calendar, MapPin, Clock, User, Users, Loader2, Star, Sparkles, Lock } from "lucide-react"
+import { Calendar, MapPin, Clock, User, Users, Loader2, Star, Sparkles, Lock, Video, ExternalLink } from "lucide-react"
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import { Badge } from "../components/ui/badge"
@@ -8,7 +8,8 @@ import { Button } from "../components/ui/button"
 import { Textarea } from "../components/ui/textarea"
 import { Card, CardContent } from "../components/ui/card"
 import { useAuth } from "../contexts/AuthContext"
-import { getEventById, getRegistrations, registerForEvent, cancelRegistration } from "../services/eventService"
+import { getEventById, getRegistrations, registerForEvent, cancelRegistration, isMeetingLinkVisible } from "../services/eventService"
+import { markAutoAttendance } from "../services/attendanceService"
 import { getSessionsByEvent, getSpeakersBySession } from "../services/sessionService"
 import { getFeedbackByEvent, submitFeedback } from "../services/feedbackService"
 import { getProfilesByIds } from "../services/userService"
@@ -36,6 +37,21 @@ export function EventDetail() {
   const [review, setReview] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading] = useState(true)
+  const [attendanceMarked, setAttendanceMarked] = useState(false)
+
+  const handleJoinMeeting = async () => {
+    if (!event || !event.meetingLink || !profile) return
+    window.open(event.meetingLink, "_blank", "noopener,noreferrer")
+    if (!attendanceMarked && role === "attendee") {
+      try {
+        await markAutoAttendance(event.id, profile.id)
+        setAttendanceMarked(true)
+        toast.success("Attendance recorded automatically")
+      } catch {
+        // attendance is best-effort
+      }
+    }
+  }
 
   const fetchData = useCallback(async () => {
     if (!id) return
@@ -66,7 +82,7 @@ export function EventDetail() {
       setSessions(sess)
       setRegistrations(regs)
       setFeedbackList(fb)
-      const venueData = await getVenueById(data.venueId)
+      const venueData = data.venueId ? await getVenueById(data.venueId) : undefined
       setVenue(venueData)
       const attendeeIds = [...new Set(fb.map((f) => f.attendeeId))]
       if (attendeeIds.length > 0) {
@@ -82,7 +98,7 @@ export function EventDetail() {
       }
     }
     setLoading(false)
-  }, [id, profile])
+  }, [id, profile, code])
 
   useEffect(() => { fetchData() }, [fetchData])
 
@@ -192,7 +208,7 @@ export function EventDetail() {
             )}
             <div className="flex flex-wrap gap-4 mb-6 text-sm text-muted-foreground">
               <span className="flex items-center gap-1.5"><Calendar size={16} className="text-teal-500" />{new Date(event.startDate).toLocaleDateString()} - {new Date(event.endDate).toLocaleDateString()}</span>
-              <span className="flex items-center gap-1.5"><MapPin size={16} className="text-teal-500" />{venue?.name ?? "Unknown venue"}</span>
+              <span className="flex items-center gap-1.5"><MapPin size={16} className="text-teal-500" />{event.eventType === "online" ? "Online event" : (venue?.name ?? "Unknown venue")}</span>
               <span className="flex items-center gap-1.5"><Users size={16} className="text-teal-500" />{confirmedCount}/{event.capacity} registered</span>
             </div>
             {spotsLeft > 0 && spotsLeft <= 10 && (
@@ -250,6 +266,45 @@ export function EventDetail() {
             </div>
           </div>
         </div>
+
+        {event.eventType === "online" && isMeetingLinkVisible(event) && myRegistration && myRegistration.status === "confirmed" && (
+          <div className="mt-6 rounded-xl border border-primary/30 bg-primary/5 p-5 flex flex-col sm:flex-row sm:items-center gap-4">
+            <div className="flex items-center gap-3 flex-1">
+              <div className="p-3 rounded-lg bg-primary/15 text-primary">
+                <Video size={22} />
+              </div>
+              <div>
+                <p className="font-semibold">Online Meeting</p>
+                <p className="text-sm text-muted-foreground">
+                  {event.meetingLinkCreatedAt
+                    ? `Link generated on ${new Date(event.meetingLinkCreatedAt).toLocaleString()}`
+                    : "The meeting link is now available."}
+                </p>
+              </div>
+            </div>
+            <Button className="gap-2 bg-gradient-to-r from-teal-500 to-amber-500 text-white" onClick={handleJoinMeeting}>
+              <ExternalLink size={16} /> Join Meeting
+            </Button>
+          </div>
+        )}
+
+        {event.eventType === "online" && !isMeetingLinkVisible(event) && myRegistration && (
+          <div className="mt-6 rounded-xl border border-border bg-muted/30 p-5 flex items-center gap-3">
+            <Video size={20} className="text-muted-foreground" />
+            <p className="text-sm text-muted-foreground">
+              The meeting link will be available here one hour before the event starts. Only registered attendees can join.
+            </p>
+          </div>
+        )}
+
+        {confirmedCount >= event.capacity && !myRegistration && (
+          <div className="mt-6 rounded-xl border border-amber-500/40 bg-amber-500/10 p-5">
+            <p className="font-semibold text-amber-700 dark:text-amber-400">Capacity is full</p>
+            <p className="text-sm text-muted-foreground mt-1">
+              All seats are taken. You can still join the waiting list — you'll be notified automatically if a spot opens up.
+            </p>
+          </div>
+        )}
 
         <Tabs defaultValue="about" className="mt-8">
           <TabsList>

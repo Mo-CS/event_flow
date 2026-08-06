@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { Link, useNavigate } from "react-router-dom"
-import { Calendar, Ticket as TicketIcon, Bell, Clock, ExternalLink, Plus, XCircle, TrendingUp, Users, Building2, Layers, FileUp, BarChart3, Settings, Shield, Activity } from "lucide-react"
+import { Calendar, Ticket as TicketIcon, Bell, Clock, ExternalLink, Plus, XCircle, TrendingUp, Users, Building2, Layers, FileUp, BarChart3, Settings, Shield, Activity, MessageSquare, Star } from "lucide-react"
 import { toast } from "sonner"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Badge } from "../components/ui/badge"
@@ -89,21 +89,23 @@ function OrganizerDashboard() {
           ) : (
             <div className="space-y-3">
               {events.map((event) => (
-                <Link key={event.id} to={`/events/${event.id}`} className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors group">
-                  <div>
+                <div key={event.id} className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors group">
+                  <Link to={`/events/${event.id}`} className="flex-1 min-w-0">
                     <p className="font-medium group-hover:text-primary transition-colors">{event.title}</p>
                     <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
                       <span>{new Date(event.startDate).toLocaleDateString()}</span>
                       <span>{event.capacity} spots</span>
                     </div>
-                  </div>
+                  </Link>
                   <div className="flex items-center gap-2">
+                    <Link to={`/dashboard/events/${event.id}/chat`}>
+                      <Button size="sm" variant="ghost" className="gap-1.5"><MessageSquare size={14} /> Chat</Button>
+                    </Link>
                     <Badge variant={event.status === "published" ? "default" : event.status === "draft" ? "secondary" : "outline"}>
                       {event.status}
                     </Badge>
-                    <ExternalLink size={14} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                   </div>
-                </Link>
+                </div>
               ))}
             </div>
           )}
@@ -186,10 +188,26 @@ function AttendeeDashboard() {
                         <span className="text-xs text-muted-foreground">{event?.startDate ? `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate!).toLocaleDateString()}` : new Date(reg.registeredAt).toLocaleDateString()}</span>
                       </div>
                     </div>
-                    {reg.status !== "cancelled" && event?.endDate && new Date(event.endDate) > new Date() && (
-                      <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleCancel(reg)}>
-                        <XCircle size={14} /> Cancel
-                      </Button>
+                    {reg.status !== "cancelled" && (
+                      <div className="flex items-center gap-2">
+                        <Link to={`/dashboard/events/${reg.eventId}/chat`}>
+                          <Button size="sm" variant="outline" className="gap-1.5">
+                            <MessageSquare size={14} /> Chat
+                          </Button>
+                        </Link>
+                        {event?.endDate && new Date(event.endDate) < new Date() && (
+                          <Link to={`/events/${reg.eventId}/evaluate`}>
+                            <Button size="sm" variant="outline" className="gap-1.5">
+                              <Star size={14} /> Evaluate
+                            </Button>
+                          </Link>
+                        )}
+                        {new Date(event?.endDate ?? Date.now()) > new Date() && (
+                          <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleCancel(reg)}>
+                            <XCircle size={14} /> Cancel
+                          </Button>
+                        )}
+                      </div>
                     )}
                   </div>
                 )

@@ -31,6 +31,9 @@ export function UserDetail() {
       }
       setRoles(rolesData)
       setLoading(false)
+    }).catch((e: any) => {
+      toast.error(e?.message ?? "Failed to load user")
+      setLoading(false)
     })
   }, [id])
 
@@ -40,25 +43,37 @@ export function UserDetail() {
   const initials = `${user.profile?.firstName?.[0] ?? ""}${user.profile?.lastName?.[0] ?? ""}`
 
   const handleSave = async () => {
-    await updateUser(user.id, form)
-    const updated = await getUserById(user.id)
-    if (updated) setUser(updated)
-    setEditing(false)
-    toast.success("User updated")
+    try {
+      await updateUser(user.id, form)
+      const updated = await getUserById(user.id)
+      if (updated) setUser(updated)
+      setEditing(false)
+      toast.success("User updated")
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to save user")
+    }
   }
 
   const handleSuspend = async () => {
-    await suspendUser(user.id)
-    const updated = await getUserById(user.id)
-    if (updated) setUser(updated)
-    toast.success("User suspended")
+    try {
+      await suspendUser(user.id)
+      const updated = await getUserById(user.id)
+      if (updated) setUser(updated)
+      toast.success("User suspended")
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to suspend user")
+    }
   }
 
   const handleActivate = async () => {
-    await activateUser(user.id)
-    const updated = await getUserById(user.id)
-    if (updated) setUser(updated)
-    toast.success("User activated")
+    try {
+      await activateUser(user.id)
+      const updated = await getUserById(user.id)
+      if (updated) setUser(updated)
+      toast.success("User activated")
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to activate user")
+    }
   }
 
   return (

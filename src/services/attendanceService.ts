@@ -24,11 +24,16 @@ function mapTicket(t: Record<string, any>): Ticket {
 export async function checkIn(ticketId: string): Promise<Attendance> {
   const { data: ticket } = await supabase
     .from("tickets")
-    .select("status")
+    .select("status, registration:registrations(status)")
     .eq("id", ticketId)
     .single()
   if (!ticket) throw new Error("Ticket not found")
   if (ticket.status === "used") throw new Error("Ticket already checked in")
+
+  const regStatus = (ticket as any).registration?.status
+  if (regStatus !== "confirmed") {
+    throw new Error("Registration is not confirmed — cannot check in")
+  }
 
   await supabase
     .from("tickets")
@@ -98,11 +103,14 @@ export async function getAttendanceByTicket(ticketId: string): Promise<Attendanc
 export async function findTicketByCode(code: string): Promise<Ticket | undefined> {
   const { data, error } = await supabase
     .from("tickets")
-    .select("*")
+    .select("*, registration:registrations(status)")
     .ilike("unique_code", code)
     .maybeSingle()
   if (error) throw error
-  return data ? mapTicket(data) : undefined
+  if (!data) return undefined
+  const regStatus = (data as any).registration?.status
+  if (regStatus !== "confirmed") return undefined
+  return mapTicket(data)
 }
 
 export async function findTicketByAttendee(eventId: string, attendeeId: string): Promise<Ticket | undefined> {
@@ -111,6 +119,7 @@ export async function findTicketByAttendee(eventId: string, attendeeId: string):
     .select("id")
     .eq("event_id", eventId)
     .eq("attendee_id", attendeeId)
+    .eq("status", "confirmed")
     .maybeSingle()
 
   if (!reg) return undefined
@@ -122,4 +131,27 @@ export async function findTicketByAttendee(eventId: string, attendeeId: string):
     .maybeSingle()
   if (error) throw error
   return data ? mapTicket(data) : undefined
+}
+
+/**
+ * Marks auto-attendance for online events when the attendee opens the meeting link.
+ * Records attendance if not already recorded. Idempotent.
+ */
+export async function markAutoAttendance(eventId: string, attendeeId: string): Promise<void> {
+  const ticket = await findTicketByAttendee(eventId, attendeeId)
+  if (!ticket) return
+
+  const { data: existing } = await supabase
+    .from("attendance")
+    .select("id")
+    .eq("ticket_id", ticket.id)
+    .maybeSingle()
+  if (existing) return
+
+  await supabase
+    .from("tickets")
+    .update({ status: "used" })
+    .eq("id", ticket.id)
+
+  await supabase.from("attendance").insert({ ticket_id: ticket.id })
 }

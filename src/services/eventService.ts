@@ -45,6 +45,46 @@ export async function getEventsByOrganizer(organizerId: string): Promise<Event[]
   return data.map(mapEvent)
 }
 
+/**
+ * All events a user can manage: their own, events they are assigned to
+ * (event_organizers), plus every event when role is admin or managesAllEvents.
+ */
+export async function getEventsForUser(
+  profileId: string,
+  userId: string,
+  role: string,
+  managesAllEvents: boolean,
+): Promise<Event[]> {
+  if (role === "admin" || managesAllEvents) return getAllEvents()
+
+  const own = await getEventsByOrganizer(profileId)
+
+  const { data: assigned } = await supabase
+    .from("event_organizers")
+    .select("event_id")
+    .eq("user_id", userId)
+  const eventIds = (assigned ?? []).map((r: any) => r.event_id)
+
+  let fromAssignments: Event[] = []
+  if (eventIds.length > 0) {
+    const { data, error } = await supabase
+      .from("events")
+      .select("*")
+      .in("id", eventIds)
+      .is("deleted_at", null)
+      .order("created_at", { ascending: false })
+    if (error) throw error
+    fromAssignments = data.map(mapEvent)
+  }
+
+  const seen = new Set<string>()
+  return [...own, ...fromAssignments].filter((e) => {
+    if (seen.has(e.id)) return false
+    seen.add(e.id)
+    return true
+  })
+}
+
 export async function createEvent(data: Omit<Event, "id">): Promise<Event> {
   const { data: inserted, error } = await supabase
     .from("events")
@@ -61,7 +101,7 @@ export async function updateEvent(id: string, data: Partial<Event>): Promise<Eve
   if (data.description !== undefined) payload.description = data.description
   if (data.coverImageUrl !== undefined) payload.cover_image_url = data.coverImageUrl
   if (data.organizerId !== undefined) payload.organizer_id = data.organizerId
-  if (data.venueId !== undefined) payload.venue_id = data.venueId
+  if (data.venueId !== undefined) payload.venue_id = data.venueId || null
   if (data.capacity !== undefined) payload.capacity = data.capacity
   if (data.registrationDeadline !== undefined) payload.registration_deadline = data.registrationDeadline
   if (data.startDate !== undefined) payload.start_date = data.startDate
@@ -70,6 +110,8 @@ export async function updateEvent(id: string, data: Partial<Event>): Promise<Eve
   if (data.visibility !== undefined) payload.visibility = data.visibility
   if (data.contactEmail !== undefined) payload.contact_email = data.contactEmail
   if (data.categoryId !== undefined) payload.category_id = data.categoryId
+  if (data.eventType !== undefined) payload.event_type = data.eventType
+  if (data.meetingLink !== undefined) payload.meeting_link = data.meetingLink
   const { data: updated, error } = await supabase
     .from("events")
     .update(payload)
@@ -78,6 +120,31 @@ export async function updateEvent(id: string, data: Partial<Event>): Promise<Eve
     .single()
   if (error) throw error
   return updated ? mapEvent(updated) : undefined
+}
+
+export async function setMeetingLink(
+  id: string,
+  link: string,
+  generatedBy: string,
+): Promise<Event | undefined> {
+  const { data: updated, error } = await supabase
+    .from("events")
+    .update({
+      meeting_link: link,
+      meeting_link_generated_by: generatedBy,
+      meeting_link_created_at: new Date().toISOString(),
+    })
+    .eq("id", id)
+    .select()
+    .single()
+  if (error) throw error
+  return updated ? mapEvent(updated) : undefined
+}
+
+export function isMeetingLinkVisible(event: Pick<Event, "eventType" | "meetingLink" | "startDate" | "meetingLinkCreatedAt">): boolean {
+  if (event.eventType !== "online" || !event.meetingLink) return false
+  const oneHourBefore = new Date(event.startDate).getTime() - 60 * 60 * 1000
+  return Date.now() >= oneHourBefore
 }
 
 export async function deleteEvent(id: string): Promise<boolean> {
@@ -108,11 +175,14 @@ export async function duplicateEvent(id: string): Promise<Event | undefined> {
     title: `${original.title} (Copy)`,
     status: "draft",
     visibility: "private",
+    meetingLink: undefined,
+    meetingLinkGeneratedBy: undefined,
+    meetingLinkCreatedAt: undefined,
   })
 }
 
 export async function publishEvent(id: string): Promise<Event | undefined> {
-  return updateEvent(id, { status: "published", visibility: "public" })
+  return updateEvent(id, { status: "published" })
 }
 
 export async function archiveEvent(id: string): Promise<Event | undefined> {
@@ -120,7 +190,7 @@ export async function archiveEvent(id: string): Promise<Event | undefined> {
 }
 
 export async function setDraft(id: string): Promise<Event | undefined> {
-  return updateEvent(id, { status: "draft", visibility: "private" })
+  return updateEvent(id, { status: "draft" })
 }
 
 export async function getSessions(eventId: string): Promise<Session[]> {
@@ -166,10 +236,20 @@ export async function getRegistrationForAttendee(eventId: string, attendeeId: st
 export async function registerForEvent(eventId: string, attendeeId: string, code?: string): Promise<{ registration: Registration; waitlisted: boolean }> {
   const { data: event } = await supabase
     .from("events")
-    .select("title, capacity, visibility")
+    .select("title, capacity, visibility, status, start_date, end_date, registration_deadline")
     .eq("id", eventId)
     .single()
   if (!event) throw new Error("Event not found")
+
+  if (event.status !== "published") {
+    throw new Error("This event is not open for registration")
+  }
+  if (event.registration_deadline && new Date(event.registration_deadline).getTime() < Date.now()) {
+    throw new Error("The registration deadline has passed")
+  }
+  if (new Date(event.end_date).getTime() < Date.now()) {
+    throw new Error("This event has already ended")
+  }
 
   if (event.visibility === "private") {
     if (!code) throw new Error("An invitation code is required for this private event")
@@ -216,6 +296,31 @@ export async function registerForEvent(eventId: string, attendeeId: string, code
 
   const reg = mapRegistration(registration)
 
+  // Send confirmation / waitlist notification
+  const { sendNotification } = await import("./notificationService")
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("user_id")
+    .eq("id", attendeeId)
+    .single()
+  if (prof) {
+    if (!isFull) {
+      await sendNotification(
+        prof.user_id,
+        "registration_confirmation",
+        `Your registration for "${event.title}" has been confirmed. Your ticket is ready in your dashboard.`,
+        `/events/${eventId}`,
+      )
+    } else {
+      await sendNotification(
+        prof.user_id,
+        "waitlist",
+        `All seats for "${event.title}" are currently taken. You've been added to the waiting list and will be notified if a spot opens up.`,
+        `/events/${eventId}`,
+      )
+    }
+  }
+
   if (event.visibility === "private" && code) {
     const { markLinkAsUsed } = await import("./invitationService")
     const { data: link } = await supabase
@@ -224,6 +329,24 @@ export async function registerForEvent(eventId: string, attendeeId: string, code
       .eq("code", code)
       .single()
     if (link) await markLinkAsUsed(link.id)
+
+    // Notify the organizer(s) that the invited user has joined
+    const { data: ev } = await supabase
+      .from("events")
+      .select("organizer_id, title")
+      .eq("id", eventId)
+      .single()
+    const { data: orgProf } = ev
+      ? await supabase.from("profiles").select("user_id").eq("id", ev.organizer_id).single()
+      : { data: null }
+    if (orgProf && ev) {
+      await sendNotification(
+        orgProf.user_id,
+        "invitation_used",
+        `An invited guest just registered for "${ev.title}" using their invitation link.`,
+        `/events/${eventId}`,
+      )
+    }
   }
 
   return { registration: reg, waitlisted: isFull }
@@ -256,7 +379,7 @@ async function generateTicketForRegistration(registration: Registration, eventTi
 export async function cancelRegistration(id: string): Promise<boolean> {
   const { data: reg } = await supabase
     .from("registrations")
-    .select("event_id, registered_at")
+    .select("event_id, status")
     .eq("id", id)
     .single()
   if (!reg) return false
@@ -265,6 +388,9 @@ export async function cancelRegistration(id: string): Promise<boolean> {
     .from("registrations")
     .update({ status: "cancelled" })
     .eq("id", id)
+
+  // Only promote a waitlisted attendee when a *confirmed* spot was freed.
+  if (reg.status !== "confirmed") return true
 
   const { data: waitlisted } = await supabase
     .from("registrations")
@@ -355,6 +481,10 @@ function mapEvent(e: Record<string, any>): Event {
     visibility: e.visibility,
     contactEmail: e.contact_email,
     categoryId: e.category_id,
+    eventType: e.event_type === "online" ? "online" : "in_person",
+    meetingLink: e.meeting_link ?? undefined,
+    meetingLinkGeneratedBy: e.meeting_link_generated_by ?? undefined,
+    meetingLinkCreatedAt: e.meeting_link_created_at ?? undefined,
     deletedAt: e.deleted_at ?? undefined,
   }
 }
@@ -365,7 +495,7 @@ function toDbEvent(e: Omit<Event, "id">): Record<string, unknown> {
     description: e.description,
     cover_image_url: e.coverImageUrl,
     organizer_id: e.organizerId,
-    venue_id: e.venueId,
+    venue_id: e.venueId || null,
     capacity: e.capacity,
     registration_deadline: e.registrationDeadline,
     start_date: e.startDate,
@@ -374,6 +504,8 @@ function toDbEvent(e: Omit<Event, "id">): Record<string, unknown> {
     visibility: e.visibility,
     contact_email: e.contactEmail,
     category_id: e.categoryId,
+    event_type: e.eventType,
+    meeting_link: e.meetingLink ?? null,
   }
 }
 

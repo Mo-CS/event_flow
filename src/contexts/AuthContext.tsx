@@ -1,6 +1,7 @@
 import { createContext, useContext, useState, useCallback, useEffect, type ReactNode } from "react"
 import type { User, Profile, RoleName } from "../types"
 import * as authService from "../services/authService"
+import * as sessionService from "../services/deviceSessionService"
 
 const SESSION_KEY = "eventflow_session"
 
@@ -31,10 +32,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   })
 
   useEffect(() => {
-    const email = localStorage.getItem(SESSION_KEY)
-    if (email) {
+    const token = localStorage.getItem(SESSION_KEY)
+    if (token) {
       authService
-        .getProfileByEmail(email)
+        .restoreSession(token)
         .then((result) => {
           setState({
             user: result.user,
@@ -57,7 +58,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, isLoading: true }))
     try {
       const result = await authService.login(email, password)
-      localStorage.setItem(SESSION_KEY, email)
+      const session = await sessionService.createDeviceSession(result.user.id)
+      if (session.token) localStorage.setItem(SESSION_KEY, session.token)
       setState({
         user: result.user,
         profile: result.profile,
@@ -75,7 +77,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setState((s) => ({ ...s, isLoading: true }))
     try {
       const result = await authService.register(email, password, firstName, lastName)
-      localStorage.setItem(SESSION_KEY, email)
+      const session = await sessionService.createDeviceSession(result.user.id)
+      if (session.token) localStorage.setItem(SESSION_KEY, session.token)
       setState({
         user: result.user,
         profile: result.profile,
@@ -90,16 +93,20 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   }, [])
 
   const logout = useCallback(() => {
+    const token = localStorage.getItem(SESSION_KEY)
+    if (token) {
+      authService.revokeSession(token).catch(() => {})
+    }
     localStorage.removeItem(SESSION_KEY)
     setState({ user: null, profile: null, role: null, isAuthenticated: false, isLoading: false })
   }, [])
 
   const refreshProfile = useCallback(async () => {
-    const email = state.user?.email
-    if (!email) return
-    const result = await authService.getProfileByEmail(email)
+    const token = localStorage.getItem(SESSION_KEY)
+    if (!token) return
+    const result = await authService.restoreSession(token)
     setState((s) => ({ ...s, user: result.user, profile: result.profile, role: result.role }))
-  }, [state.user?.email])
+  }, [])
 
   return (
     <AuthContext.Provider value={{ ...state, login, register, logout, refreshProfile }}>

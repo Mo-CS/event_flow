@@ -42,35 +42,40 @@ export function AttendanceManagement() {
   const fetch = useCallback(async () => {
     if (!eventId) return
     setLoading(true)
-    const event = await getEventById(eventId)
-    if (!event) { navigate("/dashboard/events"); return }
-    if (event.organizerId !== profile?.id && role !== "admin") { navigate("/dashboard/events"); return }
-    setEventTitle(event.title)
-    const regs = await getRegistrations(eventId)
-    const confirmed = regs.filter((r) => r.status === "confirmed").sort((a, b) => new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime())
-    setRegistrations(confirmed)
-    const att = await getAttendanceByEvent(eventId)
-    const amap = new Map<string, Attendance>()
-    const tmap = new Map<string, Ticket>()
-    const regIds = confirmed.map((r) => r.id)
-    if (regIds.length > 0) {
-      const tkts = await getTicketsByIds((await Promise.all(regIds.map((id) => getTicketByRegistration(id)))).filter(Boolean).map((t) => t!.id))
-      const byReg = new Map<string, Ticket>()
-      for (const t of tkts) {
-        byReg.set(t.registrationId, t)
-        tmap.set(t.registrationId, t)
+    try {
+      const event = await getEventById(eventId)
+      if (!event) { navigate("/dashboard/events"); return }
+      if (event.organizerId !== profile?.id && role !== "admin") { navigate("/dashboard/events"); return }
+      setEventTitle(event.title)
+      const regs = await getRegistrations(eventId)
+      const confirmed = regs.filter((r) => r.status === "confirmed").sort((a, b) => new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime())
+      setRegistrations(confirmed)
+      const att = await getAttendanceByEvent(eventId)
+      const amap = new Map<string, Attendance>()
+      const tmap = new Map<string, Ticket>()
+      const regIds = confirmed.map((r) => r.id)
+      if (regIds.length > 0) {
+        const tkts = await getTicketsByIds((await Promise.all(regIds.map((id) => getTicketByRegistration(id)))).filter(Boolean).map((t) => t!.id))
+        const byReg = new Map<string, Ticket>()
+        for (const t of tkts) {
+          byReg.set(t.registrationId, t)
+          tmap.set(t.registrationId, t)
+        }
+        const attendeeIds = [...new Set(confirmed.map((r) => r.attendeeId))]
+        const profs = await getProfilesByIds(attendeeIds)
+        setProfileMap(new Map(profs.map((p: any) => [p.id, p])))
       }
-      const attendeeIds = [...new Set(confirmed.map((r) => r.attendeeId))]
-      const profs = await getProfilesByIds(attendeeIds)
-      setProfileMap(new Map(profs.map((p: any) => [p.id, p])))
+      for (const a of att) {
+        amap.set(a.ticketId, a)
+      }
+      setAttendanceRecords(amap)
+      setTicketMap(tmap)
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to load")
+    } finally {
+      setLoading(false)
     }
-    for (const a of att) {
-      amap.set(a.ticketId, a)
-    }
-    setAttendanceRecords(amap)
-    setTicketMap(tmap)
-    setLoading(false)
-  }, [eventId, navigate])
+  }, [eventId, navigate, profile?.id, role])
 
   useEffect(() => { fetch() }, [fetch])
 
@@ -91,47 +96,60 @@ export function AttendanceManagement() {
     if (!ticket) return
     const att = attendanceRecords.get(ticket.id)
     if (!att) { toast.error("No check-in record found"); return }
-    await checkOut(att.id)
-    toast.success("Checked out")
-    fetch()
+    try {
+      await checkOut(att.id)
+      toast.success("Checked out")
+      fetch()
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to check out")
+    }
   }
 
   const lookupTicket = async (code: string) => {
     if (!code.trim()) return
     setScanning(true)
-    const ticket = await findTicketByCode(code.trim())
-    if (!ticket) {
-      toast.error("No ticket found with that code")
+    try {
+      const ticket = await findTicketByCode(code.trim())
+      if (!ticket) {
+        toast.error("No ticket found with that code")
+        return
+      }
+      const reg = registrations.find((r) => r.id === ticket.registrationId)
+      if (!reg) {
+        toast.error("Registration not found for this ticket")
+        return
+      }
+      const attendee = profileMap.get(reg.attendeeId)
+      const existingAtt = await getAttendanceByTicket(ticket.id)
+      setPendingConfirm({ ticket, registration: reg, profile: attendee, existingAtt: existingAtt ?? null })
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to look up ticket")
+    } finally {
       setScanning(false)
-      return
     }
-    const reg = registrations.find((r) => r.id === ticket.registrationId)
-    if (!reg) {
-      toast.error("Registration not found for this ticket")
-      setScanning(false)
-      return
-    }
-                const attendee = profileMap.get(reg.attendeeId)
-    const existingAtt = await getAttendanceByTicket(ticket.id)
-    setPendingConfirm({ ticket, registration: reg, profile: attendee, existingAtt })
-    setScanning(false)
   }
 
   const handleConfirmCheckIn = async () => {
     if (!pendingConfirm) return
     const { ticket, existingAtt } = pendingConfirm
-    if (existingAtt && existingAtt.checkOutTime) {
-      toast.success("Ticket already checked in and out")
-    } else if (existingAtt) {
-      await checkOut(existingAtt.id)
-      toast.success(`${pendingConfirm.profile?.firstName ?? "Attendee"} checked out`)
-    } else {
-      await checkIn(ticket.id)
-      toast.success(`${pendingConfirm.profile?.firstName ?? "Attendee"} checked in`)
+    try {
+      if (existingAtt && existingAtt.checkOutTime) {
+        toast.success("Ticket already checked in and out")
+      } else if (existingAtt) {
+        await checkOut(existingAtt.id)
+        toast.success(`${pendingConfirm.profile?.firstName ?? "Attendee"} checked out`)
+      } else {
+        await checkIn(ticket.id)
+        toast.success(`${pendingConfirm.profile?.firstName ?? "Attendee"} checked in`)
+      }
+      setScanCode("")
+      fetch()
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to process check-in")
+    } finally {
+      setPendingConfirm(null)
+      setScanning(false)
     }
-    setPendingConfirm(null)
-    setScanCode("")
-    fetch()
   }
 
   const handleScan = () => {

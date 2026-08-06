@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
-import { Bell, Mail, MailOpen, Trash2, Send, CheckCheck } from "lucide-react"
+import { useNavigate } from "react-router-dom"
+import { Bell, Mail, MailOpen, Trash2, Send, CheckCheck, ExternalLink } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
@@ -21,6 +22,7 @@ const typeColors: Record<string, "default" | "secondary" | "outline" | "destruct
 
 export function Notifications() {
   const { profile } = useAuth()
+  const navigate = useNavigate()
   const [notifs, setNotifs] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
   const [sending, setSending] = useState(false)
@@ -28,12 +30,25 @@ export function Notifications() {
   const fetch = useCallback(async () => {
     if (!profile) return
     setLoading(true)
-    const data = await getNotifications(profile.userId)
-    setNotifs(data)
-    setLoading(false)
+    try {
+      const data = await getNotifications(profile.userId)
+      setNotifs(data)
+    } catch {
+      toast.error("Could not load notifications")
+    } finally {
+      setLoading(false)
+    }
   }, [profile])
 
   useEffect(() => { fetch() }, [fetch])
+
+  const handleOpen = async (n: Notification) => {
+    if (!n.readAt) {
+      await markAsRead(n.id).catch(() => {})
+      setNotifs((prev) => prev.map((x) => (x.id === n.id ? { ...x, readAt: new Date().toISOString() } : x)))
+    }
+    if (n.link) navigate(n.link)
+  }
 
   const handleMarkRead = async (id: string) => {
     await markAsRead(id)
@@ -96,13 +111,13 @@ export function Notifications() {
         </TabsList>
 
         <TabsContent value="all" className="mt-4">
-          {renderList(notifs, handleMarkRead, handleDelete)}
+          {renderList(notifs, handleMarkRead, handleDelete, handleOpen)}
         </TabsContent>
         <TabsContent value="unread" className="mt-4">
-          {renderList(unread, handleMarkRead, handleDelete)}
+          {renderList(unread, handleMarkRead, handleDelete, handleOpen)}
         </TabsContent>
         <TabsContent value="read" className="mt-4">
-          {renderList(read, handleMarkRead, handleDelete)}
+          {renderList(read, handleMarkRead, handleDelete, handleOpen)}
         </TabsContent>
       </Tabs>
     </div>
@@ -113,6 +128,7 @@ function renderList(
   items: Notification[],
   onMarkRead: (id: string) => void,
   onDelete: (id: string) => void,
+  onOpen: (n: Notification) => void,
 ) {
   if (items.length === 0) return <EmptyState title="No notifications" description="You're all caught up!" icon={<Bell />} />
 
@@ -121,9 +137,10 @@ function renderList(
       {items.map((n) => (
         <div
           key={n.id}
+          onClick={() => onOpen(n)}
           className={`flex items-start gap-3 p-4 rounded-lg border border-border transition-colors ${
-            !n.readAt ? "bg-primary/5 border-primary/20 shadow-sm" : ""
-          }`}
+            n.link ? "cursor-pointer hover:bg-accent/50" : ""
+          } ${!n.readAt ? "bg-primary/5 border-primary/20 shadow-sm" : ""}`}
         >
           <div className="mt-0.5">
             {n.readAt ? <MailOpen size={18} className="text-muted-foreground" /> : <Mail size={18} className="text-primary" />}
@@ -135,7 +152,12 @@ function renderList(
             </div>
             <p className="text-xs text-muted-foreground mt-1">{new Date(n.createdAt).toLocaleString()}</p>
           </div>
-          <div className="flex gap-1 shrink-0">
+          <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+            {n.link && (
+              <Button size="icon" variant="ghost" className="h-8 w-8" title="Open" onClick={() => onOpen(n)}>
+                <ExternalLink size={14} />
+              </Button>
+            )}
             {!n.readAt && (
               <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onMarkRead(n.id)} title="Mark as read">
                 <CheckCheck size={14} />

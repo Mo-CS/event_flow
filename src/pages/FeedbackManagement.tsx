@@ -23,25 +23,34 @@ export function FeedbackManagement() {
   const fetch = useCallback(async () => {
     if (!profile) return
     setLoading(true)
-    const data = await getFeedbackForOrganizer(profile.id)
-    setFeedbackList(data)
-    const attendeeIds = [...new Set(data.map((f) => f.attendeeId))]
-    if (attendeeIds.length > 0) {
-      const profs = await getProfilesByIds(attendeeIds)
-      setProfileMap(new Map(profs.map((p: any) => [p.id, p])))
+    try {
+      const data = await getFeedbackForOrganizer(profile.id)
+      setFeedbackList(data)
+      const attendeeIds = [...new Set(data.map((f) => f.attendeeId))]
+      if (attendeeIds.length > 0) {
+        const profs = await getProfilesByIds(attendeeIds)
+        setProfileMap(new Map(profs.map((p: any) => [p.id, p])))
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to load")
+    } finally {
+      setLoading(false)
     }
-    setLoading(false)
   }, [profile])
 
   useEffect(() => { fetch() }, [fetch])
 
   const handleRespond = async (fbId: string) => {
     if (!responseText.trim()) return
-    await respondToFeedback(fbId, responseText.trim())
-    toast.success("Response posted")
-    setResponding(null)
-    setResponseText("")
-    fetch()
+    try {
+      await respondToFeedback(fbId, responseText.trim())
+      toast.success("Response posted")
+      setResponding(null)
+      setResponseText("")
+      fetch()
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to post response")
+    }
   }
 
   if (loading) return <Loading text="Loading feedback..." />

@@ -1,16 +1,20 @@
 import { useState, useEffect } from "react"
-import { Download, BarChart3, PieChart, TrendingUp, Star } from "lucide-react"
+import {
+  Download, Printer, BarChart3, PieChart, TrendingUp, Star, Users, Wallet,
+  CalendarDays, MapPin, ClipboardList,
+} from "lucide-react"
 import {
   BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer,
   PieChart as RePieChart, Pie, Cell, LineChart, Line, Legend,
 } from "recharts"
 import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Button } from "../components/ui/button"
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table"
+import { Badge } from "../components/ui/badge"
 import { Loading } from "../components/ui/Loading"
 import { getReportData, exportToCsv } from "../services/reportsService"
-import { supabase } from "../lib/supabase"
 
-const COLORS = ["#007bff", "#28a745", "#6f42c1", "#fd7e14", "#e83e8c", "#20c997", "#ffc107", "#dc3545"]
+const COLORS = ["#007bff", "#28a745", "#6f42c1", "#fd7e14", "#e83e8c", "#20c997", "#ffc107", "#dc3545", "#17a2b8", "#6c757d"]
 
 export function Reports() {
   const [data, setData] = useState<any>(null)
@@ -23,80 +27,66 @@ export function Reports() {
   if (loading) return <Loading text="Loading reports..." />
   if (!data) return null
 
-  const statusPie = [
-    { name: "Confirmed", value: data.summary.confirmedRegs },
-    { name: "Cancelled", value: data.summary.cancelledRegs },
-    { name: "Waitlisted", value: data.summary.waitlistedRegs },
-  ].filter((d) => d.value > 0)
+  const handlePrint = () => window.print()
 
-  const handleExportRegistrations = async () => {
-    const { data: regs } = await supabase.from("registrations").select("event_id, status, registered_at")
-    const { data: evs } = await supabase.from("events").select("id, title")
-    const evMap = Object.fromEntries((evs ?? []).map((e: any) => [e.id, e.title]))
-    const rows = (regs ?? []).map((r: any) => ({
-      "Event": evMap[r.event_id] ?? "Unknown",
-      "Status": r.status,
-      "Registered": new Date(r.registered_at).toLocaleDateString(),
-    }))
-    exportToCsv(rows, "registrations.csv")
-  }
+  const exportSection = (rows: Record<string, any>[], name: string) => exportToCsv(rows, `${name}.csv`)
 
-  const handleExportEvents = async () => {
-    const { data: evs } = await supabase.from("events").select("id, title, status, capacity, start_date")
-    const { data: regs } = await supabase.from("registrations").select("event_id, status")
-    const regCounts: Record<string, number> = {}
-    for (const r of regs ?? []) {
-      if (r.status !== "cancelled") regCounts[r.event_id] = (regCounts[r.event_id] || 0) + 1
-    }
-    const rows = (evs ?? []).map((e: any) => ({
-      Title: e.title, Status: e.status, Capacity: e.capacity,
-      "Start Date": new Date(e.start_date).toLocaleDateString(),
-      Registrations: regCounts[e.id] ?? 0,
-    }))
-    exportToCsv(rows, "events.csv")
+  const handleExportAll = () => {
+    exportSection(data.eventPopularity.map((e: any) => ({ "Event": e.name, Registrations: e.registrations })), "event-popularity")
+    exportSection(data.attendanceRateByEvent.map((e: any) => ({
+      "Event": e.name, Registered: e.registered, Attended: e.attended, "Attendance %": e.rate, "Fill %": e.fillRate,
+    })), "attendance")
+    exportSection(data.topAttendees.map((a: any) => ({ Name: a.name, "Events Attended": a.attended })), "top-attendees")
+    exportSection(data.avgRatingByEvent.map((e: any) => ({
+      "Event": e.name, "Avg Rating": e.average, Count: e.count,
+    })), "ratings")
+    exportSection(data.costsByEvent.map((c: any) => ({
+      "Event": c.name, Planned: c.planned, Actual: c.actual, Difference: c.difference,
+    })), "costs")
+    exportSection(data.registrationTrend.map((t: any) => ({ Month: t.month, Registrations: t.count })), "registration-trend")
+    exportSection(data.statusPie, "registrations-by-status")
+    exportSection(data.attendanceRateByEvent.map((e: any) => ({
+      "Event": e.name, Status: e.status ?? "published", Confirmed: e.confirmed, Cancelled: e.cancelled, Waitlisted: e.waitlisted, Attended: e.attended,
+    })), "per-event-detail")
   }
 
   return (
-    <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Reports & Analytics</h1>
-
-      <div className="grid sm:grid-cols-5 gap-4">
-        <StatCard label="Total Events" value={data.summary.totalEvents} icon={BarChart3} />
-        <StatCard label="Total Regs" value={data.summary.totalRegs} icon={TrendingUp} />
-        <StatCard label="Confirmed" value={data.summary.confirmedRegs} color="bg-green-500/10" />
-        <StatCard label="Cancelled" value={data.summary.cancelledRegs} color="bg-red-500/10" />
-        <StatCard label="Avg Rating" value={data.summary.averageRating} icon={Star} color="bg-yellow-500/10" />
+    <div className="space-y-6" id="reports-root">
+      <div className="flex items-center justify-between no-print">
+        <h1 className="text-2xl font-bold">Comprehensive Reports</h1>
+        <div className="flex gap-2">
+          <Button variant="outline" size="sm" className="gap-2" onClick={handlePrint}>
+            <Printer size={15} /> Print
+          </Button>
+          <Button variant="outline" size="sm" className="gap-2" onClick={handleExportAll}>
+            <Download size={15} /> Export All (CSV)
+          </Button>
+        </div>
       </div>
 
+      {/* 1. Overview */}
+      <SectionTitle icon={BarChart3} title="Overview" />
+      <div className="grid sm:grid-cols-4 gap-4">
+        <StatCard label="Total Events" value={data.summary.totalEvents} icon={CalendarDays} />
+        <StatCard label="Total Users" value={data.summary.totalUsers} icon={Users} />
+        <StatCard label="Total Registrations" value={data.summary.totalRegs} icon={TrendingUp} />
+        <StatCard label="Confirmed" value={data.summary.confirmedRegs} color="bg-green-500/10 text-green-600" />
+        <StatCard label="Cancelled" value={data.summary.cancelledRegs} color="bg-red-500/10 text-red-600" />
+        <StatCard label="Waitlisted" value={data.summary.waitlistedRegs} color="bg-amber-500/10 text-amber-600" />
+        <StatCard label="Attendance" value={data.summary.totalAttendance} color="bg-blue-500/10 text-blue-600" />
+        <StatCard label="Avg Rating" value={data.summary.averageRating} icon={Star} color="bg-yellow-500/10 text-yellow-600" />
+      </div>
+
+      {/* 2. Users / commitment */}
+      <SectionTitle icon={Users} title="Users, Commitment & No-Shows" />
       <div className="grid lg:grid-cols-2 gap-6">
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2"><TrendingUp size={16} /> Registration Trend</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base">Users by Role</CardTitle></CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <LineChart data={data.registrationTrend}>
-                <CartesianGrid strokeDasharray="3 3" />
-                <XAxis dataKey="month" />
-                <YAxis allowDecimals={false} />
-                <Tooltip />
-                <Line type="monotone" dataKey="count" stroke="#007bff" strokeWidth={2} dot={{ r: 4 }} />
-              </LineChart>
-            </ResponsiveContainer>
-          </CardContent>
-        </Card>
-
-        <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2"><PieChart size={16} /> Registration Status</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
+            <ResponsiveContainer width="100%" height={220}>
               <RePieChart>
-                <Pie data={statusPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
-                  {statusPie.map((_, i) => (
-                    <Cell key={i} fill={COLORS[i % COLORS.length]} />
-                  ))}
+                <Pie data={data.usersByRole} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                  {data.usersByRole.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
                 </Pie>
                 <Tooltip />
                 <Legend />
@@ -104,13 +94,257 @@ export function Reports() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2"><BarChart3 size={16} /> Registrations by Category</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base">Attendance Commitment</CardTitle></CardHeader>
+          <CardContent className="space-y-3">
+            <CommitmentBar
+              label="Attended at least one event"
+              value={data.attendanceCommitment.attended}
+              total={data.attendanceCommitment.attended + data.attendanceCommitment.noShow}
+              color="bg-green-500"
+            />
+            <CommitmentBar
+              label="Registered but never attended"
+              value={data.attendanceCommitment.noShow}
+              total={data.attendanceCommitment.attended + data.attendanceCommitment.noShow}
+              color="bg-red-500"
+            />
+            <p className="text-sm text-muted-foreground pt-1">
+              Suspended accounts: <Badge variant="outline">{data.suspendedCount}</Badge>
+            </p>
+          </CardContent>
+        </Card>
+        <Card className="lg:col-span-2">
+          <CardHeader><CardTitle className="text-base">Top Attendees</CardTitle></CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
+            {data.topAttendees.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No data yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>#</TableHead>
+                      <TableHead>Name</TableHead>
+                      <TableHead className="text-right">Events Attended</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.topAttendees.map((a: any, i: number) => (
+                      <TableRow key={a.profileId}>
+                        <TableCell className="text-muted-foreground">{i + 1}</TableCell>
+                        <TableCell className="font-medium">{a.name}</TableCell>
+                        <TableCell className="text-right">{a.attended}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 3. Events / most requested */}
+      <SectionTitle icon={CalendarDays} title="Events & Most Requested" />
+      <div className="grid lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader><CardTitle className="text-base">Event Popularity (Registrations)</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={260}>
+              <BarChart data={data.eventPopularity} layout="vertical">
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis type="number" allowDecimals={false} />
+                <YAxis type="category" dataKey="name" width={140} tick={{ fontSize: 11 }} />
+                <Tooltip />
+                <Bar dataKey="registrations" fill="#6f42c1" radius={[0, 4, 4, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-base">Events by Status</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={260}>
+              <RePieChart>
+                <Pie data={data.eventsByStatus} dataKey="count" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                  {data.eventsByStatus.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </RePieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 4. Attendance */}
+      <SectionTitle icon={ClipboardList} title="Attendance" />
+      <div className="grid lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader><CardTitle className="text-base">Attendance by Event Type</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={data.attendanceByType}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Bar dataKey="value" fill="#20c997" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-base">Attendance & Fill Rate by Event</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={data.attendanceRateByEvent}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="registered" fill="#007bff" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="attended" fill="#28a745" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 5. Evaluation */}
+      <SectionTitle icon={Star} title="Evaluation & Feedback" />
+      <div className="grid lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader><CardTitle className="text-base">Registration Trend (by month)</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={240}>
+              <LineChart data={data.registrationTrend}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="month" tick={{ fontSize: 10 }} />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Line type="monotone" dataKey="count" stroke="#007bff" strokeWidth={2} dot={{ r: 4 }} />
+              </LineChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-base">Registrations by Status</CardTitle></CardHeader>
+          <CardContent>
+            {data.statusPie.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No data yet.</p>
+            ) : (
+              <ResponsiveContainer width="100%" height={240}>
+                <RePieChart>
+                  <Pie data={data.statusPie} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                    {data.statusPie.map((_: any, i: number) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                  </Pie>
+                  <Tooltip />
+                  <Legend />
+                </RePieChart>
+              </ResponsiveContainer>
+            )}
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-base">Rating Distribution</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={data.ratingDistribution}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="label" />
+                <YAxis allowDecimals={false} />
+                <Tooltip />
+                <Bar dataKey="count" fill="#ffc107" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+        <Card className="lg:col-span-2">
+          <CardHeader><CardTitle className="text-base">Average Rating by Event</CardTitle></CardHeader>
+          <CardContent>
+            {data.avgRatingByEvent.length === 0 ? (
+              <p className="text-sm text-muted-foreground">No ratings yet.</p>
+            ) : (
+              <div className="overflow-x-auto">
+                <Table>
+                  <TableHeader>
+                    <TableRow>
+                      <TableHead>Event</TableHead>
+                      <TableHead className="text-right">Avg Rating</TableHead>
+                      <TableHead className="text-right">Responses</TableHead>
+                    </TableRow>
+                  </TableHeader>
+                  <TableBody>
+                    {data.avgRatingByEvent.map((e: any) => (
+                      <TableRow key={e.id}>
+                        <TableCell className="font-medium">{e.name}</TableCell>
+                        <TableCell className="text-right">{e.average}</TableCell>
+                        <TableCell className="text-right">{e.count}</TableCell>
+                      </TableRow>
+                    ))}
+                  </TableBody>
+                </Table>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 6. Costs */}
+      <SectionTitle icon={Wallet} title="Costs" />
+      <div className="grid sm:grid-cols-3 gap-4">
+        <StatCard label="Total Planned" value={data.summary.totalPlannedCosts.toLocaleString()} icon={Wallet} color="bg-blue-500/10 text-blue-600" />
+        <StatCard label="Total Actual" value={data.summary.totalActualCosts.toLocaleString()} icon={Wallet} color="bg-amber-500/10 text-amber-600" />
+        <StatCard
+          label="Difference"
+          value={`${(data.summary.totalPlannedCosts - data.summary.totalActualCosts) >= 0 ? "+" : ""}${(data.summary.totalPlannedCosts - data.summary.totalActualCosts).toLocaleString()}`}
+          icon={PieChart}
+          color="bg-green-500/10 text-green-600"
+        />
+      </div>
+      <div className="grid lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader><CardTitle className="text-base">Planned vs Actual by Event</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={data.costsByEvent}>
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="name" tick={{ fontSize: 10 }} />
+                <YAxis />
+                <Tooltip />
+                <Legend />
+                <Bar dataKey="planned" fill="#007bff" radius={[4, 4, 0, 0]} />
+                <Bar dataKey="actual" fill="#fd7e14" radius={[4, 4, 0, 0]} />
+              </BarChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-base">Costs by Need Type</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={240}>
+              <RePieChart>
+                <Pie data={Object.entries(data.needTypeDist).map(([name, value]) => ({ name, value }))} dataKey="value" nameKey="name" cx="50%" cy="50%" outerRadius={80} label>
+                  {Object.entries(data.needTypeDist).map((_, i) => <Cell key={i} fill={COLORS[i % COLORS.length]} />)}
+                </Pie>
+                <Tooltip />
+                <Legend />
+              </RePieChart>
+            </ResponsiveContainer>
+          </CardContent>
+        </Card>
+      </div>
+
+      {/* 7. Categories & Venues */}
+      <SectionTitle icon={MapPin} title="Categories & Venues" />
+      <div className="grid lg:grid-cols-2 gap-6">
+        <Card>
+          <CardHeader><CardTitle className="text-base">Events by Category</CardTitle></CardHeader>
+          <CardContent>
+            <ResponsiveContainer width="100%" height={240}>
               <BarChart data={data.categoryBreakdown}>
                 <CartesianGrid strokeDasharray="3 3" />
                 <XAxis dataKey="name" />
@@ -121,39 +355,71 @@ export function Reports() {
             </ResponsiveContainer>
           </CardContent>
         </Card>
-
         <Card>
-          <CardHeader>
-            <CardTitle className="text-base flex items-center gap-2"><BarChart3 size={16} /> Event Popularity</CardTitle>
-          </CardHeader>
+          <CardHeader><CardTitle className="text-base">Events by Venue</CardTitle></CardHeader>
           <CardContent>
-            <ResponsiveContainer width="100%" height={250}>
-              <BarChart data={data.eventPopularity} layout="vertical">
+            <ResponsiveContainer width="100%" height={240}>
+              <BarChart data={data.venueBreakdown}>
                 <CartesianGrid strokeDasharray="3 3" />
-                <XAxis type="number" allowDecimals={false} />
-                <YAxis type="category" dataKey="name" width={120} tick={{ fontSize: 12 }} />
+                <XAxis dataKey="name" />
+                <YAxis allowDecimals={false} />
                 <Tooltip />
-                <Bar dataKey="registrations" fill="#6f42c1" radius={[0, 4, 4, 0]} />
+                <Bar dataKey="count" fill="#e83e8c" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
           </CardContent>
         </Card>
       </div>
 
+      {/* 8. Per-event detail */}
+      <SectionTitle icon={ClipboardList} title="Per-Event Detail" />
       <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Export Data</CardTitle>
-        </CardHeader>
-        <CardContent className="flex flex-wrap gap-3">
-          <Button variant="outline" className="gap-2" onClick={handleExportRegistrations}>
-            <Download size={14} /> Export Registrations (CSV)
-          </Button>
-          <Button variant="outline" className="gap-2" onClick={handleExportEvents}>
-            <Download size={14} /> Export Events (CSV)
-          </Button>
+        <CardContent className="pt-4">
+          <div className="overflow-x-auto">
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Event</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead>Type</TableHead>
+                  <TableHead className="text-right">Capacity</TableHead>
+                  <TableHead className="text-right">Confirmed</TableHead>
+                  <TableHead className="text-right">Cancelled</TableHead>
+                  <TableHead className="text-right">Waitlisted</TableHead>
+                  <TableHead className="text-right">Attendance %</TableHead>
+                  <TableHead className="text-right">Fill %</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.attendanceRateByEvent.map((e: any) => (
+                  <TableRow key={e.id}>
+                    <TableCell className="font-medium">{e.name}</TableCell>
+                    <TableCell><Badge variant="outline">{e.status ?? "published"}</Badge></TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{data.events.find((ev: any) => ev.id === e.id)?.event_type ?? "in_person"}</Badge>
+                    </TableCell>
+                    <TableCell className="text-right">{data.events.find((ev: any) => ev.id === e.id)?.capacity ?? "—"}</TableCell>
+                    <TableCell className="text-right">{e.confirmed ?? e.registered}</TableCell>
+                    <TableCell className="text-right">{e.cancelled ?? 0}</TableCell>
+                    <TableCell className="text-right">{e.waitlisted ?? 0}</TableCell>
+                    <TableCell className="text-right">{e.rate}%</TableCell>
+                    <TableCell className="text-right">{e.fillRate}%</TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </div>
         </CardContent>
       </Card>
     </div>
+  )
+}
+
+function SectionTitle({ icon: Icon, title }: { icon: any; title: string }) {
+  return (
+    <h2 className="text-lg font-bold pt-2 flex items-center gap-2 border-b border-border pb-2">
+      <Icon size={18} className="text-primary" /> {title}
+    </h2>
   )
 }
 
@@ -168,5 +434,20 @@ function StatCard({ icon: Icon, label, value, color }: { icon?: any; label: stri
         </div>
       </CardContent>
     </Card>
+  )
+}
+
+function CommitmentBar({ label, value, total, color }: { label: string; value: number; total: number; color: string }) {
+  const pct = total > 0 ? Math.round((value / total) * 100) : 0
+  return (
+    <div>
+      <div className="flex justify-between text-sm mb-1">
+        <span>{label}</span>
+        <span className="font-semibold">{value} ({pct}%)</span>
+      </div>
+      <div className="h-3 bg-muted rounded-full overflow-hidden">
+        <div className={`h-full ${color}`} style={{ width: `${pct}%` }} />
+      </div>
+    </div>
   )
 }

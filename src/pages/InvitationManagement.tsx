@@ -1,55 +1,187 @@
 import { useState, useEffect, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
-import { ArrowLeft, Plus, Trash2, Copy, Check, Mail } from "lucide-react"
+import { ArrowLeft, Plus, Trash2, Copy, Check, Mail, UserCheck, UserX, Loader2, Search, Users } from "lucide-react"
 import { toast } from "sonner"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
+import { Checkbox } from "../components/ui/checkbox"
 import { Loading } from "../components/ui/Loading"
 import { EmptyState } from "../components/ui/EmptyState"
 import { useAuth } from "../contexts/AuthContext"
 import { getEventById } from "../services/eventService"
-import { getLinksByEvent, createLink, deleteLink } from "../services/invitationService"
+import { getLinksByEvent, createLink, createLinksBulk, deleteLink } from "../services/invitationService"
+import { checkUserExists } from "../services/authService"
+import { createUser, getAllUsersForInvite, type InviteUser } from "../services/userService"
 import type { InvitationLink } from "../types"
 
 export function InvitationManagement() {
   const { eventId } = useParams<{ eventId: string }>()
   const { profile, role } = useAuth()
   const navigate = useNavigate()
+
   const [eventTitle, setEventTitle] = useState("")
   const [links, setLinks] = useState<InvitationLink[]>([])
   const [loading, setLoading] = useState(true)
-  const [email, setEmail] = useState("")
-  const [adding, setAdding] = useState(false)
   const [copiedId, setCopiedId] = useState<string | null>(null)
+
+  // single-add flow with verification
+  const [email, setEmail] = useState("")
+  const [checking, setChecking] = useState(false)
+  const [adding, setAdding] = useState(false)
+  const [verification, setVerification] = useState<"idle" | "exists" | "missing">("idle")
+
+  // new-user form (email prefilled)
+  const [newUserOpen, setNewUserOpen] = useState(false)
+  const [newUser, setNewUser] = useState({ email: "", firstName: "", lastName: "", password: "" })
+
+  // user-list flow
+  const [users, setUsers] = useState<InviteUser[]>([])
+  const [usersLoading, setUsersLoading] = useState(true)
+  const [userSearch, setUserSearch] = useState("")
+  const [selectedUsers, setSelectedUsers] = useState<Set<string>>(new Set())
+  const [invitedEmails, setInvitedEmails] = useState<Set<string>>(new Set())
+  const [bulkGenerating, setBulkGenerating] = useState(false)
 
   const fetch = useCallback(async () => {
     if (!eventId) return
     setLoading(true)
-    const event = await getEventById(eventId)
-    if (!event) { navigate("/dashboard/events"); return }
-    if (event.organizerId !== profile?.id && role !== "admin") { navigate("/dashboard/events"); return }
-    setEventTitle(event.title)
-    const l = await getLinksByEvent(eventId)
-    setLinks(l)
-    setLoading(false)
-  }, [eventId, navigate])
+    try {
+      const event = await getEventById(eventId)
+      if (!event) { navigate("/dashboard/events"); return }
+      if (event.organizerId !== profile?.id && role !== "admin") { navigate("/dashboard/events"); return }
+      setEventTitle(event.title)
+      const l = await getLinksByEvent(eventId)
+      setLinks(l)
+      setInvitedEmails(new Set(l.map((link) => link.email.toLowerCase())))
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to load")
+    } finally {
+      setLoading(false)
+    }
+    setUsersLoading(true)
+    try {
+      const all = await getAllUsersForInvite()
+      setUsers(all)
+    } catch {
+      setUsers([])
+      toast.error("Could not load the user list")
+    } finally {
+      setUsersLoading(false)
+    }
+  }, [eventId, navigate, profile?.id, role])
 
   useEffect(() => { fetch() }, [fetch])
 
+  const handleVerify = async () => {
+    if (!email.trim()) return
+    setChecking(true)
+    setVerification("idle")
+    try {
+      const exists = await checkUserExists(email.trim().toLowerCase())
+      setVerification(exists ? "exists" : "missing")
+      if (exists) {
+        toast.success("Account found — ready to invite")
+      } else {
+        toast.info("No account found. Add the user to create the invitation.")
+      }
+    } catch {
+      toast.error("Could not verify email")
+    } finally {
+      setChecking(false)
+    }
+  }
+
   const handleAdd = async () => {
-    if (!eventId || !email.trim()) return
+    if (!eventId || !email.trim() || verification !== "exists") return
     setAdding(true)
     try {
-      const link = await createLink(eventId, email.trim())
-      toast.success(`Invitation link created for ${link.email}`)
+      const link = await createLink(eventId, email.trim().toLowerCase())
+      toast.success(`Invitation created for ${link.email}`)
       setEmail("")
+      setVerification("idle")
       fetch()
     } catch (err: any) {
       toast.error(err.message ?? "Failed to create invitation")
     } finally {
       setAdding(false)
+    }
+  }
+
+  const openAddUser = () => {
+    setNewUser({ email: email.trim().toLowerCase(), firstName: "", lastName: "", password: "" })
+    setNewUserOpen(true)
+  }
+
+  const handleCreateUserAndLink = async () => {
+    if (!eventId) return
+    if (!newUser.email.trim() || !newUser.firstName.trim() || !newUser.lastName.trim() || newUser.password.length < 6) {
+      toast.error("Fill all fields (password min 6 chars)")
+      return
+    }
+    setAdding(true)
+    try {
+      await createUser({
+        email: newUser.email.trim().toLowerCase(),
+        password: newUser.password,
+        firstName: newUser.firstName.trim(),
+        lastName: newUser.lastName.trim(),
+        roleName: "attendee",
+      })
+      const link = await createLink(eventId, newUser.email.trim().toLowerCase())
+      toast.success(`User created and invited (${link.email})`)
+      setNewUserOpen(false)
+      setEmail("")
+      setVerification("idle")
+      fetch()
+    } catch (err: any) {
+      toast.error(err.message ?? "Failed to create user")
+    } finally {
+      setAdding(false)
+    }
+  }
+
+  const availableUsers = users.filter((u) => !invitedEmails.has(u.email.toLowerCase()))
+
+  const filteredUsers = availableUsers.filter((u) => {
+    const q = userSearch.trim().toLowerCase()
+    if (!q) return true
+    return (
+      u.email.toLowerCase().includes(q) ||
+      `${u.firstName} ${u.lastName}`.toLowerCase().includes(q)
+    )
+  })
+
+  const toggleAllUsers = (checked: boolean) => {
+    setSelectedUsers(checked ? new Set(filteredUsers.map((u) => u.email)) : new Set())
+  }
+
+  const toggleUser = (email: string, checked: boolean) => {
+    setSelectedUsers((prev) => {
+      const next = new Set(prev)
+      if (checked) next.add(email)
+      else next.delete(email)
+      return next
+    })
+  }
+
+  const handleGenerateFromList = async () => {
+    if (!eventId || selectedUsers.size === 0) return
+    setBulkGenerating(true)
+    try {
+      const created = await createLinksBulk(eventId, [...selectedUsers])
+      if (created.length > 0) {
+        toast.success(`Created ${created.length} invitation link(s)`)
+      } else {
+        toast.info("All selected users already have links")
+      }
+      setSelectedUsers(new Set())
+      fetch()
+    } catch (err: any) {
+      toast.error(err.message ?? "Failed to create invitations")
+    } finally {
+      setBulkGenerating(false)
     }
   }
 
@@ -88,24 +220,136 @@ export function InvitationManagement() {
         <Badge variant="secondary">{links.length} link{links.length !== 1 ? "s" : ""}</Badge>
       </div>
 
-      <div className="flex gap-2">
-        <Input
-          type="email"
-          placeholder="Enter email address..."
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          onKeyDown={(e) => e.key === "Enter" && handleAdd()}
-          className="max-w-sm"
-        />
-        <Button onClick={handleAdd} disabled={adding || !email.trim()} className="gap-2">
-          <Plus size={16} /> {adding ? "Creating..." : "Create Link"}
-        </Button>
+      {/* Single invite with verification */}
+      <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+        <h2 className="font-semibold">Invite One Person</h2>
+        <p className="text-sm text-muted-foreground">
+          First check the email, then generate a unique one-time link. Only confirmed accounts are invitable.
+        </p>
+        <div className="flex gap-2">
+          <Input
+            type="email"
+            placeholder="Enter email address..."
+            value={email}
+            onChange={(e) => { setEmail(e.target.value); setVerification("idle") }}
+            onKeyDown={(e) => e.key === "Enter" && handleVerify()}
+            className="max-w-sm"
+          />
+          <Button variant="outline" onClick={handleVerify} disabled={checking || !email.trim()} className="gap-2">
+            {checking ? <Loader2 size={15} className="animate-spin" /> : verification === "missing" ? <UserX size={15} /> : <UserCheck size={15} />}
+            {checking ? "Checking..." : "Check"}
+          </Button>
+        </div>
+
+        {verification === "exists" && (
+          <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
+            <UserCheck size={16} /> Account exists.
+            <Button size="sm" onClick={handleAdd} disabled={adding} className="gap-1.5">
+              <Plus size={14} /> {adding ? "Creating..." : "Create Invitation"}
+            </Button>
+          </div>
+        )}
+
+        {verification === "missing" && (
+          <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
+            <UserX size={16} /> No account found.
+            <Button size="sm" variant="outline" onClick={openAddUser} className="gap-1.5">
+              <UserCheck size={14} /> Add User & Invite
+            </Button>
+          </div>
+        )}
       </div>
 
+      {/* Invite from user list */}
+      <div className="rounded-xl border border-border bg-card p-6 space-y-4">
+        <div className="flex items-center justify-between">
+          <h2 className="font-semibold">Invite Users</h2>
+          <Badge variant="secondary">{availableUsers.length} available</Badge>
+        </div>
+        <p className="text-sm text-muted-foreground">
+          Select the users you want to invite to this private event. Users who already have a link are shown at the bottom as already invited.
+        </p>
+
+        <div className="flex gap-2">
+          <div className="relative flex-1 max-w-sm">
+            <Search size={15} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
+            <Input
+              value={userSearch}
+              onChange={(e) => setUserSearch(e.target.value)}
+              placeholder="Search by name or email..."
+              className="pl-9"
+            />
+          </div>
+          <Button variant="outline" onClick={() => setUserSearch("")} disabled={!userSearch}>Clear</Button>
+        </div>
+
+        {usersLoading ? (
+          <div className="py-6 text-center text-sm text-muted-foreground">Loading users...</div>
+        ) : users.length === 0 ? (
+          <EmptyState title="No users found" description="Create attendee accounts first, then invite them here." />
+        ) : (
+          <div className="space-y-3">
+            <div className="flex items-center gap-2 border-b border-border pb-2">
+              <Checkbox
+                id="select-all-users"
+                checked={filteredUsers.length > 0 && selectedUsers.size === filteredUsers.length}
+                onCheckedChange={(c) => toggleAllUsers(!!c)}
+                label={<span className="text-sm font-medium">Select all {filteredUsers.length} user(s)</span>}
+              />
+            </div>
+            <div className="max-h-80 overflow-y-auto space-y-1.5 border border-border rounded-lg p-2">
+              {filteredUsers.length === 0 ? (
+                <p className="text-sm text-muted-foreground text-center py-6">No users match your search</p>
+              ) : (
+                filteredUsers.map((u) => (
+                  <div key={u.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
+                    <Checkbox
+                      id={`inv-user-${u.id}`}
+                      checked={selectedUsers.has(u.email)}
+                      onCheckedChange={(c) => toggleUser(u.email, !!c)}
+                      label={
+                        <span className="flex items-center gap-2 text-sm">
+                          <span className="font-medium">{u.firstName} {u.lastName}</span>
+                          <span className="text-muted-foreground">{u.email}</span>
+                          <Badge variant="outline" className="capitalize">{u.roleName}</Badge>
+                        </span>
+                      }
+                    />
+                  </div>
+                ))
+              )}
+            </div>
+            <Button onClick={handleGenerateFromList} disabled={bulkGenerating || selectedUsers.size === 0} className="gap-2">
+              <Loader2 size={15} className={bulkGenerating ? "animate-spin" : "hidden"} />
+              <Users size={15} className={bulkGenerating ? "hidden" : ""} />
+              Generate {selectedUsers.size > 0 ? `(${selectedUsers.size})` : ""} Invitation Link{selectedUsers.size !== 1 ? "s" : ""}
+            </Button>
+          </div>
+        )}
+
+        {invitedEmails.size > 0 && (
+          <div className="space-y-1.5">
+            <p className="text-xs font-medium text-muted-foreground">Already invited ({invitedEmails.size})</p>
+            <div className="max-h-32 overflow-y-auto space-y-1">
+              {users.filter((u) => invitedEmails.has(u.email.toLowerCase())).map((u) => (
+                <div key={u.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-1.5 text-sm">
+                  <Mail size={13} className="text-muted-foreground" />
+                  <span className="font-medium">{u.firstName} {u.lastName}</span>
+                  <span className="text-muted-foreground text-xs">{u.email}</span>
+                  <Badge variant="secondary" className="ml-auto">invited</Badge>
+                </div>
+              ))}
+            </div>
+          </div>
+        )}
+      </div>
+
+      {/* Existing links */}
       {links.length === 0 ? (
-        <EmptyState title="No invitation links yet" description="Enter an email above to generate a unique one-time invitation link." />
+        <EmptyState title="No invitation links yet" description="Use the flow above to invite people." />
       ) : (
         <div className="rounded-lg border border-border">
+          <div className="px-4 py-3 border-b border-border bg-muted/20 font-semibold">Existing Links</div>
           <Table>
             <TableHeader>
               <TableRow>
@@ -149,6 +393,40 @@ export function InvitationManagement() {
               ))}
             </TableBody>
           </Table>
+        </div>
+      )}
+
+      {/* Add-user dialog */}
+      {newUserOpen && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setNewUserOpen(false)}>
+          <div className="w-full max-w-md rounded-xl bg-card p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
+            <h2 className="text-lg font-semibold">Add New User & Invite</h2>
+            <p className="text-sm text-muted-foreground">A new attendee account will be created, then the invitation link generated.</p>
+            <div className="space-y-3">
+              <div>
+                <label className="block text-sm font-medium mb-1">Email</label>
+                <Input value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} type="email" />
+              </div>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">First name</label>
+                  <Input value={newUser.firstName} onChange={(e) => setNewUser({ ...newUser, firstName: e.target.value })} />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Last name</label>
+                  <Input value={newUser.lastName} onChange={(e) => setNewUser({ ...newUser, lastName: e.target.value })} />
+                </div>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Temporary password</label>
+                <Input value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} type="password" placeholder="min 6 characters" />
+              </div>
+            </div>
+            <div className="flex justify-end gap-2 pt-2">
+              <Button variant="outline" onClick={() => setNewUserOpen(false)}>Cancel</Button>
+              <Button onClick={handleCreateUserAndLink} disabled={adding}>{adding ? "Creating..." : "Create & Invite"}</Button>
+            </div>
+          </div>
         </div>
       )}
     </div>

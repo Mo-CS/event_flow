@@ -13,6 +13,7 @@ import {
 } from "../ui/dropdown-menu"
 import { useAuth } from "../../contexts/AuthContext"
 import { useTheme } from "../../contexts/ThemeContext"
+import { usePageTitle } from "../../lib/usePageTitle"
 import { getUnreadCount, getNotifications, markAllAsRead } from "../../services/notificationService"
 import ChatWidget from "../chat/ChatWidget"
 
@@ -21,6 +22,7 @@ export function AppLayout() {
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
+  usePageTitle(location.pathname)
   const [sidebarOpen, setSidebarOpen] = useState(false)
   const [unread, setUnread] = useState(0)
   const [recentNotifs, setRecentNotifs] = useState<any[]>([])

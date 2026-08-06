@@ -22,6 +22,7 @@ export interface Profile {
   phoneNumber: string
   avatarUrl: string
   roleId: string
+  managesAllEvents?: boolean
 }
 
 export interface Category {
@@ -46,6 +47,8 @@ export interface Venue {
 export type EventStatus = "draft" | "published" | "archived"
 export type EventVisibility = "public" | "private"
 
+export type EventType = "in_person" | "online"
+
 export interface Event {
   id: string
   title: string
@@ -61,7 +64,19 @@ export interface Event {
   visibility: EventVisibility
   contactEmail: string
   categoryId: string
+  eventType: EventType
+  meetingLink?: string
+  meetingLinkGeneratedBy?: string
+  meetingLinkCreatedAt?: string
   deletedAt?: string
+}
+
+export interface EventOrganizer {
+  id: string
+  eventId: string
+  userId: string
+  isPrimary: boolean
+  createdAt: string
 }
 
 export type AuditAction = "create" | "update" | "delete" | "login" | "logout" | "register" | "suspend" | "activate" | "publish" | "archive" | "check_in" | "check_out" | "cancel"
@@ -140,7 +155,7 @@ export interface Attendance {
   checkOutTime: string
 }
 
-export type NotificationType = "event_reminder" | "registration_confirmation" | "event_update" | "check_in"
+export type NotificationType = "event_reminder" | "registration_confirmation" | "event_update" | "check_in" | "chat_message" | "invitation" | "invitation_used" | "waitlist_promotion" | "waitlist" | "evaluation"
 
 export interface Notification {
   id: string
@@ -149,6 +164,7 @@ export interface Notification {
   message: string
   readAt: string | null
   createdAt: string
+  link?: string
 }
 
 export interface FileItem {
@@ -187,4 +203,100 @@ export interface Feedback {
   submittedAt: string
   response?: string
   respondedAt?: string
+}
+
+// --- Chat ---
+export type ChatChannelType = "general" | "private"
+
+export interface ChatChannel {
+  id: string
+  eventId: string
+  channelType: ChatChannelType
+  organizerId: string | null
+  attendeeId?: string | null
+  createdAt: string
+}
+
+export interface ChatMessage {
+  id: string
+  channelId: string
+  senderId: string
+  content: string
+  createdAt: string
+}
+
+export interface ChatMessageWithSender extends ChatMessage {
+  senderName: string
+  senderRole?: string
+}
+
+// --- Evaluations ---
+export type RatingType = "numeric" | "stars"
+export type EvaluationPrivacy = "secret" | "public"
+
+export interface Evaluation {
+  id: string
+  eventId: string
+  title: string
+  ratingType: RatingType
+  privacy: EvaluationPrivacy
+  createdBy: string
+  createdAt: string
+}
+
+export type EvaluationQuestionType = "multiple_choice" | "text"
+
+export interface EvaluationQuestion {
+  id: string
+  evaluationId: string
+  question: string
+  questionType: EvaluationQuestionType
+  options: string[]
+  sortOrder: number
+}
+
+export interface EvaluationSubmission {
+  id: string
+  evaluationId: string
+  attendeeId: string
+  rating: number | null
+  isPublic: boolean
+  createdAt: string
+}
+
+export interface EvaluationAnswer {
+  id: string
+  submissionId: string
+  questionId: string
+  answer: string | null
+}
+
+// --- Costs ---
+export type CostType = "planned" | "actual"
+
+export interface EventCost {
+  id: string
+  eventId: string
+  costType: CostType
+  item: string
+  needType: string
+  quantity: number
+  unitPrice: number
+  notes: string | null
+  createdBy: string
+  updatedBy?: string
+  createdAt: string
+  updatedAt: string
+}
+
+// --- Device sessions ---
+export interface DeviceSession {
+  id: string
+  userId: string
+  deviceName: string
+  ipAddress: string
+  token?: string
+  isCurrent?: boolean
+  lastActiveAt: string
+  createdAt: string
 }

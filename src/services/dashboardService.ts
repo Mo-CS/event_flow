@@ -12,7 +12,7 @@ export async function getAdminStats() {
     { count: totalCategories },
     { count: totalFeedback },
   ] = await Promise.all([
-    supabase.from("users").select("*", { count: "exact", head: true }),
+    supabase.from("users").select("id", { count: "exact", head: true }),
     supabase.from("events").select("*", { count: "exact", head: true }),
     supabase.from("events").select("*", { count: "exact", head: true }).eq("status", "published"),
     supabase.from("registrations").select("*", { count: "exact", head: true }),
@@ -67,20 +67,29 @@ export async function getOrganizerStats(organizerId: string) {
     .from("events")
     .select("*")
     .eq("organizer_id", organizerId)
+    .is("deleted_at", null)
+    .order("start_date")
 
   const events = myEvents ?? []
   const myEventIds = events.map((e) => e.id)
 
-  const { count: totalRegs } = await supabase
-    .from("registrations")
-    .select("*", { count: "exact", head: true })
-    .in("event_id", myEventIds)
-
-  const { count: confirmedRegs } = await supabase
-    .from("registrations")
-    .select("*", { count: "exact", head: true })
-    .in("event_id", myEventIds)
-    .eq("status", "confirmed")
+  let totalRegs = 0
+  let confirmedRegs = 0
+  if (myEventIds.length > 0) {
+    const results = await Promise.all([
+      supabase
+        .from("registrations")
+        .select("*", { count: "exact", head: true })
+        .in("event_id", myEventIds),
+      supabase
+        .from("registrations")
+        .select("*", { count: "exact", head: true })
+        .in("event_id", myEventIds)
+        .eq("status", "confirmed"),
+    ])
+    totalRegs = results[0].count ?? 0
+    confirmedRegs = results[1].count ?? 0
+  }
 
   return {
     totalEvents: events.length,
@@ -105,7 +114,7 @@ export async function getAttendeeStats(attendeeId: string) {
     ? await supabase.from("events").select("*").in("id", myEventIds)
     : { data: [] }
 
-  const events = (myEvents ?? []).map(mapEvent)
+  const events = (myEvents ?? []).map(mapEvent).sort((a, b) => new Date(a.startDate).getTime() - new Date(b.startDate).getTime())
   const now = new Date()
 
   return {
@@ -180,6 +189,7 @@ function mapEvent(e: Record<string, any>): Event {
     visibility: e.visibility,
     contactEmail: e.contact_email,
     categoryId: e.category_id,
+    eventType: e.event_type === "online" ? "online" : "in_person",
     deletedAt: e.deleted_at ?? undefined,
   }
 }

@@ -69,10 +69,9 @@ export async function updateEmailTemplate(id: string, data: Partial<EmailTemplat
     .update(payload)
     .eq("id", id)
     .select()
-    .single()
 
   if (error) throw error
-  return updated ? mapTemplate(updated) : undefined
+  return updated && updated.length > 0 ? mapTemplate(updated[0]) : undefined
 }
 
 function mapTemplate(t: Record<string, any>): EmailTemplate {
