@@ -1,4 +1,5 @@
 import { t } from "../i18n"
+import { setAccessToken } from "../lib/authToken"
 import { supabase } from "../lib/supabase"
 import { sha256 } from "js-sha256"
 import type { User, Profile, RoleName } from "../types"
@@ -39,6 +40,42 @@ function parseAuthResult(result: any): AuthResult {
       managesAllEvents: result.profile.manages_all_events ?? false,
     },
     role: result.role as RoleName,
+  }
+}
+
+/**
+ * The auth RPCs also return a short-lived JWT signed by the database. It is what
+ * lets Row Level Security know who is calling (see docs/RLS_PLAN.md).
+ *
+ * The token is only kept after PostgREST accepts it: `whoami()` echoes the
+ * identity PostgREST decoded from the header. If the database has no JWT secret,
+ * or the secret does not match the project, we drop the token and the app keeps
+ * working exactly as before (anonymous requests, permissive policies).
+ */
+async function adoptAccessToken(payload: unknown): Promise<void> {
+  const token =
+    payload && typeof payload === "object" && typeof (payload as { access_token?: unknown }).access_token === "string"
+      ? ((payload as { access_token: string }).access_token)
+      : null
+
+  if (!token) {
+    setAccessToken(null)
+    return
+  }
+
+  setAccessToken(token)
+  const { data, error } = await supabase.rpc("whoami")
+  const verified =
+    !error && !!data && typeof (data as { user_id?: unknown }).user_id === "string"
+
+  if (!verified) {
+    setAccessToken(null)
+    if (import.meta.env.DEV) {
+      console.warn(
+        "[auth] Access token was rejected by PostgREST; continuing without a verified identity.",
+        error?.message ?? data,
+      )
+    }
   }
 }
 
@@ -163,6 +200,7 @@ async function legacyLogin(email: string, password: string): Promise<AuthResult>
   }
   if (row.suspended) throw new Error(t("Account suspended"))
   const result = legacyToAuthResult(row)
+  setAccessToken(null)
   persistLegacySession(result)
   logAction(result.user.id, "login", "user", result.user.id, "Logged in").catch(() => {})
   return result
@@ -218,12 +256,14 @@ async function legacyRegister(email: string, password: string, firstName: string
     },
     role: "attendee",
   }
+  setAccessToken(null)
   persistLegacySession(result)
   logAction(result.user.id, "register", "user", result.user.id, "Account registered").catch(() => {})
   return result
 }
 
 async function legacyRestoreSession(): Promise<AuthResult> {
+  setAccessToken(null)
   const snapshot = readLegacySession()
   if (!snapshot) throw new Error(t("Session expired"))
   const row = await fetchLegacyUserById(snapshot.user.id)
@@ -269,6 +309,7 @@ export async function login(email: string, password: string): Promise<AuthResult
       throw new Error(data?.error ?? error?.message ?? t("Invalid email or password"))
     }
     const result = parseAuthResult(data)
+    await adoptAccessToken(data)
     logAction(result.user.id, "login", "user", result.user.id, "Logged in").catch(() => {})
     return result
   })
@@ -294,6 +335,7 @@ export async function register(email: string, password: string, firstName: strin
     if (isMissingFunction(error)) return legacyRegister(email, password, firstName, lastName)
     if (error || !data || data.error) throw new Error(data?.error ?? error?.message ?? t("Registration failed"))
     const result = parseAuthResult(data)
+    await adoptAccessToken(data)
     logAction(result.user.id, "register", "user", result.user.id, "Account registered").catch(() => {})
     return result
   })
@@ -305,6 +347,7 @@ export async function restoreSession(token: string): Promise<AuthResult> {
   })
   if (isMissingFunction(error)) return legacyRestoreSession()
   if (error) throw new Error(t("Session expired"))
+  await adoptAccessToken(data)
   return parseAuthResult(data)
 }
 
@@ -313,10 +356,12 @@ export async function revokeSession(token: string): Promise<boolean> {
     p_token: token,
   })
   if (isMissingFunction(error)) {
+    setAccessToken(null)
     clearLegacySession()
     return true
   }
   if (error) throw error
+  setAccessToken(null)
   logAction("", "logout", "session", "", "Signed out").catch(() => {})
   return !!data
 }

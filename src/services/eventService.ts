@@ -1,6 +1,7 @@
 import { formatDate } from "../i18n/format"
 import { t } from "../i18n"
 import { supabase } from "../lib/supabase"
+import { isMissingFunction } from "../lib/supabaseErrors"
 import type { AttendanceMode, Event, Session, Speaker, Registration, Feedback, Ticket } from "../types"
 import { checkBanForRegistration, describeBan } from "./banService"
 import { generateTicket } from "./ticketService"
@@ -527,10 +528,86 @@ async function generateTicketForRegistration(
 }
 
 /**
+ * Sends the promotion notification and email. Kept in the client so the copy,
+ * the translations and the email provider stay exactly the same; the database
+ * only performs the writes that RLS would otherwise block.
+ */
+async function notifyWaitlistPromotion(row: Registration): Promise<void> {
+  const { data: ev } = await supabase
+    .from("events")
+    .select("title, event_type")
+    .eq("id", row.eventId)
+    .single()
+
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("user_id, first_name, last_name, user:users(email)")
+    .eq("id", row.attendeeId)
+    .maybeSingle()
+  if (!prof) return
+
+  const { sendNotification } = await import("./notificationService")
+  const modeLabel = (row.attendanceMode ?? (ev?.event_type === "online" ? "online" : "in_person")) === "online" ? t("online") : t("in person")
+  const message = t("A seat opened for \"{event}\" ({mode}). You have been moved from the waiting list to confirmed and your ticket is ready.", {
+    event: ev?.title ?? t("an event"),
+    mode: modeLabel,
+  })
+  await sendNotification(
+    prof.user_id,
+    "waitlist_promotion",
+    message,
+    `/events/${row.eventId}`,
+  )
+
+  // A promotion is an important status change: send an email as well as the
+  // in-app notification. In mock mode the email is logged to the console.
+  const relatedUser = Array.isArray((prof as any).user) ? (prof as any).user[0] : (prof as any).user
+  const email = relatedUser?.email as string | undefined
+  if (email) {
+    const { sendEmail, textToHtml } = await import("./emailService")
+    const greeting = `${prof.first_name ?? ""} ${prof.last_name ?? ""}`.trim()
+    await sendEmail({
+      to: email,
+      subject: t("You are confirmed for {event}", { event: ev?.title ?? t("the event") }),
+      body: textToHtml(
+        `${greeting ? `${t("Hello {name},", { name: greeting })}\n\n` : ""}${message}\n\n${t("Open EventFlow to view your ticket: {link}", { link: `/events/${row.eventId}` })}`,
+      ),
+    }).catch(() => undefined)
+  }
+}
+
+function firstRow(payload: unknown): Record<string, any> | null {
+  if (Array.isArray(payload)) return (payload[0] as Record<string, any>) ?? null
+  return (payload as Record<string, any>) ?? null
+}
+
+/**
  * Promotes the oldest waitlisted registration (per registration order), issues
  * its ticket and notifies the attendee.
+ *
+ * The database function performs the write, because the caller is normally an
+ * attendee who must not be allowed to update another user's registration.
  */
 async function promoteFirstWaitlisted(eventId: string, attendanceMode?: AttendanceMode): Promise<Registration | null> {
+  const params: Record<string, unknown> = { p_event_id: eventId }
+  if (attendanceMode) params.p_attendance_mode = attendanceMode
+  const { data, error } = await supabase.rpc("app_promote_waitlist", params)
+  if (!isMissingFunction(error)) {
+    if (error) throw error
+    const row = firstRow(data)
+    if (!row?.id) return null
+    const promoted = mapRegistration(row)
+    await notifyWaitlistPromotion(promoted)
+    return promoted
+  }
+  return promoteFirstWaitlistedLegacy(eventId, attendanceMode)
+}
+
+/**
+ * Legacy path, used only when the database does not have the helper functions
+ * yet. The permissive policies still allow the direct update in that case.
+ */
+async function promoteFirstWaitlistedLegacy(eventId: string, attendanceMode?: AttendanceMode): Promise<Registration | null> {
   let query = supabase
     .from("registrations")
     .select("*")
@@ -553,46 +630,24 @@ async function promoteFirstWaitlisted(eventId: string, attendanceMode?: Attendan
     await generateTicketForRegistration(mapRegistration(row), ev.title, ev.event_type)
   }
 
-  const { data: prof } = await supabase
-    .from("profiles")
-    .select("user_id, first_name, last_name, user:users(email)")
-    .eq("id", row.attendee_id)
-    .maybeSingle()
-  if (prof) {
-    const { sendNotification } = await import("./notificationService")
-    const modeLabel = (row.attendance_mode ?? (ev?.event_type === "online" ? "online" : "in_person")) === "online" ? t("online") : t("in person")
-    const message = t("A seat opened for \"{event}\" ({mode}). You have been moved from the waiting list to confirmed and your ticket is ready.", {
-      event: ev?.title ?? t("an event"),
-      mode: modeLabel,
-    })
-    await sendNotification(
-      prof.user_id,
-      "waitlist_promotion",
-      message,
-      `/events/${eventId}`,
-    )
-
-    // A promotion is an important status change: send an email as well as the
-    // in-app notification. In mock mode the email is logged to the console.
-    const relatedUser = Array.isArray((prof as any).user) ? (prof as any).user[0] : (prof as any).user
-    const email = relatedUser?.email as string | undefined
-    if (email) {
-      const { sendEmail, textToHtml } = await import("./emailService")
-      const greeting = `${prof.first_name ?? ""} ${prof.last_name ?? ""}`.trim()
-      await sendEmail({
-        to: email,
-        subject: t("You are confirmed for {event}", { event: ev?.title ?? t("the event") }),
-        body: textToHtml(
-          `${greeting ? `${t("Hello {name},", { name: greeting })}\n\n` : ""}${message}\n\n${t("Open EventFlow to view your ticket: {link}", { link: `/events/${eventId}` })}`,
-        ),
-      }).catch(() => undefined)
-    }
-  }
-
-  return mapRegistration({ ...row, status: "confirmed" })
+  const promoted = mapRegistration({ ...row, status: "confirmed" })
+  await notifyWaitlistPromotion(promoted)
+  return promoted
 }
 
 export async function cancelRegistration(id: string): Promise<boolean> {
+  const { data, error } = await supabase.rpc("app_cancel_registration", {
+    p_registration_id: id,
+  })
+
+  if (!isMissingFunction(error)) {
+    if (error) throw error
+    const row = firstRow(data)
+    if (row?.id) await notifyWaitlistPromotion(mapRegistration(row))
+    return true
+  }
+
+  // Legacy path (database without app_cancel_registration).
   const { data: reg } = await supabase
     .from("registrations")
     .select("event_id, status, attendance_mode, event:events(event_type)")
@@ -608,7 +663,7 @@ export async function cancelRegistration(id: string): Promise<boolean> {
   // Only promote a waitlisted attendee when a *confirmed* spot was freed.
   if (reg.status === "confirmed") {
     const ev: any = (reg as any).event
-    await promoteFirstWaitlisted(
+    await promoteFirstWaitlistedLegacy(
       reg.event_id,
       ev?.event_type === "hybrid" ? ((reg as any).attendance_mode ?? "in_person") : undefined,
     )
