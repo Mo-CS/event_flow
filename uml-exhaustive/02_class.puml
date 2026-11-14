@@ -78,23 +78,21 @@ AuthService --> supabaseClient : queries via
 AuthService --> RateLimiter : rate_limit
 AuthService --> SupabaseErrorMapper : maps_errors
 AuthService --> Profile : reads
+AuthService --> AuditService : logs_auth_events
 RegistrationService --> TicketService : issues_ticket
 RegistrationService --> NotificationService : notifies
 RegistrationService --> supabaseClient
 TicketService --> supabaseClient
 AttendanceService --> TicketService : validates
-AttendanceService --> AuditService : logs_checkin
 AttendanceService --> supabaseClient
 EventService --> supabaseClient
 EventService --> NotificationService : broadcasts_updates
 EvaluationService --> supabaseClient
-EvaluationService --> AuditService : logs_submission
 ChatService --> supabaseClient
 InvitationService --> supabaseClient
 InvitationService --> NotificationService : notifies
 UserService --> supabaseClient
 OrganizerService --> supabaseClient
-OrganizerService --> AuditService : logs_assignment
 NotificationService --> supabaseClient
 AuditService --> supabaseClient
 DeviceSessionService --> supabaseClient
@@ -123,17 +121,17 @@ ProtectedRoute --> AuthContext : reads_profile
 PublicRoute --> AuthContext : reads_session
 
 ' ============================================================================
-' ASSOCIATIONS - Chatbot (trace: supabase/functions/chatbot/index.ts)
+' ASSOCIATIONS - Chatbot (trace: src/components/chat/useChat.ts - ACTUAL path)
 ' ============================================================================
-ChatbotEdgeFunction *-- ChatTool : uses
-ChatbotEdgeFunction --> supabaseClient : db_tools
-ChatbotClient ..> ChatbotEdgeFunction : invokes_https
-ChatbotClient --> supabaseClient : fallback_path
+useChat --> supabaseClient : REST tools (browser)
+useChat *-- ChatTool : uses
+useChat ..> ChatbotEdgeFunction : design alternative (NOT used by current UI)
 
 note right of Registration
-  State machine: pending -> confirmed -> cancelled
-  or pending -> waitlisted -> confirmed.
-  (c.f. 05a_activity_registration.mmd)
+  State machine (as-built): confirmed -> cancelled,
+  or waitlisted -> confirmed (promotion after a cancel).
+  No "pending" state is ever written by the system.
+  (c.f. 05a_activity_registration.mmd, 07_state_machine.mmd)
 end note
 
 note left of Attendance

@@ -1,6 +1,8 @@
 ' ============================================================================
 ' PART 3/3 - PRESENTATION INFRA + PLATFORM (included by 02_class.puml)
-' Sources: src/contexts, src/routes, src/lib, supabase/functions/chatbot
+' Sources: src/contexts, src/routes, src/lib, src/components/chat/useChat.ts,
+'          supabase/functions/chatbot (design alternative - NOT used by current UI)
+' ACTUAL chatbot path: useChat.ts -> LM Studio (local) + Supabase REST from the browser.
 ' ============================================================================
 package "Presentation Infrastructure (src/contexts, src/routes)" as P_PRESENT {
   class AuthContext <<context>> {
@@ -25,6 +27,18 @@ package "Presentation Infrastructure (src/contexts, src/routes)" as P_PRESENT {
   class PublicRoute <<guard>> {
     - redirectAuthenticated() : void
   }
+  class useChat <<hook>> {
+    - LM_STUDIO_URL : string = "/lmstudio/v1/chat/completions"
+    + messages : ChatMessage[]
+    + isLoading : boolean
+    + error : string | null
+    + sendMessage(content) : Promise<void>
+    + clearMessages() : void
+    - chatWithTools(userMessage) : Promise<string>
+    - callLLM(messages) : Promise<string>
+    - parseToolCalls(text) : ParsedToolCall[]
+    - executeTool(name, args) : Promise<unknown>
+  }
 }
 
 package "Infrastructure (src/lib)" as P_LIB {
@@ -44,7 +58,7 @@ package "Infrastructure (src/lib)" as P_LIB {
   }
 }
 
-package "Edge Functions (supabase/functions/chatbot)" as P_EDGE {
+package "Edge Functions (supabase/functions/chatbot) - design alternative, NOT used by current UI" as P_EDGE {
   class ChatbotEdgeFunction <<edge_function>> {
     + handleRequest(req) : Promise<Response>
     - callOpenRouter(messages, tools) : Promise<ChatCompletion>
@@ -63,9 +77,5 @@ package "Edge Functions (supabase/functions/chatbot)" as P_EDGE {
     get_venues
     get_upcoming_events
     get_event_stats
-  }
-  class ChatbotClient <<component>> {
-    + sendMessage(message) : Promise<{ content, toolCalls? }>
-    - fallbackToLocalLLM(message) : Promise<{ content }>
   }
 }

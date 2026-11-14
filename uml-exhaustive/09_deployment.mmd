@@ -21,7 +21,7 @@ flowchart TB
         subgraph PGNode["عقدة فرعية: PostgreSQL 15"]
             ART_DB["الأداة: قاعدة البيانات<br/>schema.sql (30 جدول) + RLS + RPCs + Triggers"]
         end
-        subgraph EdgeNode["عقدة فرعية: Edge Runtime (Deno)"]
+        subgraph EdgeNode["عقدة فرعية: Edge Runtime (Deno) — غير مستخدم في الواجهة الحالية"]
             ART_EF["الأداة: chatbot/index.ts<br/>التصدير كـ supabase/functions"]
         end
         ART_RT["الخدمة: Realtime (CDC)<br/>chat_channels + chat_messages"]
@@ -29,17 +29,16 @@ flowchart TB
     end
 
     subgraph ExternalCloud["عُقد خارجية"]
-        OR_NODE["العقدة: OpenRouter<br/>LLM API (llama-3.2-3b-instruct)"]
-        LM_NODE["العقدة: LM Studio (جهاز المطور)<br/>للـ fallback في نسخة الاستوديو"]
+        OR_NODE["العقدة: OpenRouter<br/>LLM API (llama-3.2-3b-instruct)<br/>(غير مستخدم في الواجهة الحالية)"]
+        LM_NODE["العقدة: LM Studio (محلي)<br/>المسار الفعلي للروبوت في الواجهة"]
         EMAIL_NODE["العقدة: Email Gateway (محاكى)<br/>توصيل روابط إعادة التعيين"]
     end
 
     UserDevice -->|"HTTPS: تحميل SPA"| Hosting
     UserDevice -->|"HTTPS: REST/RPC/Storage<br/>(anon key + RLS)"| SupabaseCloud
     UserDevice -->|"WSS: اشتراك Realtime"| SupabaseCloud
-    UserDevice -->|"HTTPS: /functions/v1/chatbot"| SupabaseCloud
-    SupabaseCloud -->|"HTTPS: chat/completions<br/>(service-side فقط)"| OR_NODE
-    UserDevice -->|"HTTP محلي: fallback"| LM_NODE
+    UserDevice -->|"HTTP محلي: POST /lmstudio/v1/chat/completions (المسار الفعلي للروبوت)"| LM_NODE
+    UserDevice -.غير مستخدم في الواجهة الحالية.-> SupabaseCloud
     SupabaseCloud -->|"قوالب البريد (مؤجل/محاكى)"| EMAIL_NODE
     UserDevice -->|"داخلي: وصول الكاميرا"| ART_CAM
 
