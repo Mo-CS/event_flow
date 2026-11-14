@@ -1,9 +1,11 @@
+import { formatDate } from "../../i18n/format"
 import { useState, useEffect } from "react"
 import { Outlet, Link, useNavigate, useLocation } from "react-router-dom"
 import {
   LayoutDashboard, Calendar, User, Moon, Sun, Menu, X,
   LogOut, ChevronDown, UserCog, Layers, Building2, ListTodo,
-  Bell, FileUp, BarChart3, Settings, Shield,
+  Bell, FileUp, BarChart3, Settings, Shield, PlusCircle, Ban,
+  Wallet, Users, Mail, Megaphone, KeyRound,
 } from "lucide-react"
 import { Toaster } from "../ui/toaster"
 import { Avatar, AvatarFallback } from "../ui/avatar"
@@ -12,13 +14,17 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "../ui/dropdown-menu"
 import { useAuth } from "../../contexts/AuthContext"
+import { useSettings } from "../../contexts/SettingsContext"
 import { useTheme } from "../../contexts/ThemeContext"
 import { usePageTitle } from "../../lib/usePageTitle"
 import { getUnreadCount, getNotifications, markAllAsRead } from "../../services/notificationService"
+import { t } from "../../i18n"
 import ChatWidget from "../chat/ChatWidget"
+import { LanguageSwitcher } from "./LanguageSwitcher"
 
 export function AppLayout() {
-  const { profile, role, logout } = useAuth()
+  const { user, profile, role, logout } = useAuth()
+  const { appName, logoUrl } = useSettings()
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
@@ -33,6 +39,14 @@ export function AppLayout() {
     getUnreadCount(profile.userId).then(setUnread)
     getNotifications(profile.userId).then((n) => setRecentNotifs(n.slice(0, 5)))
   }, [profile])
+
+  // A temporary password issued by an administrator must be replaced before
+  // the user can reach any other dashboard page.
+  useEffect(() => {
+    if (!user?.mustChangePassword) return
+    if (location.pathname === "/dashboard/change-password") return
+    navigate("/dashboard/change-password", { replace: true })
+  }, [user?.mustChangePassword, location.pathname, navigate])
 
   const handleMarkAllRead = async () => {
     if (!profile) return
@@ -49,33 +63,41 @@ export function AppLayout() {
   }
 
   const sidebarLinks = [
-    { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
-    { to: "/events", label: "Browse Events", icon: Calendar },
+    { to: "/dashboard", label: t("Dashboard"), icon: LayoutDashboard },
+    { to: "/events", label: t("Browse Events"), icon: Calendar },
+    { to: "/dashboard/event-requests", label: t("Event Requests"), icon: PlusCircle },
   ]
 
   if (role === "organizer" || role === "admin") {
-    sidebarLinks.push({ to: "/dashboard/events", label: "My Events", icon: ListTodo })
+    sidebarLinks.push({ to: "/dashboard/events", label: t("My Events"), icon: ListTodo })
+    sidebarLinks.push({ to: "/dashboard/bans", label: t("Bans"), icon: Ban })
+    sidebarLinks.push({ to: "/dashboard/finance", label: t("Finance"), icon: Wallet })
+    sidebarLinks.push({ to: "/dashboard/audience", label: t("Audience"), icon: Users })
+    sidebarLinks.push({ to: "/dashboard/campaigns", label: t("Campaigns"), icon: Mail })
   }
 
   if (role === "admin") {
-    sidebarLinks.push({ to: "/dashboard/admin/users", label: "Users", icon: UserCog })
-    sidebarLinks.push({ to: "/dashboard/admin/categories", label: "Categories", icon: Layers })
-    sidebarLinks.push({ to: "/dashboard/admin/venues", label: "Venues", icon: Building2 })
-    sidebarLinks.push({ to: "/dashboard/admin/files", label: "Files", icon: FileUp })
-    sidebarLinks.push({ to: "/dashboard/admin/reports", label: "Reports", icon: BarChart3 })
-    sidebarLinks.push({ to: "/dashboard/admin/settings", label: "Settings", icon: Settings })
-    sidebarLinks.push({ to: "/dashboard/admin/security", label: "Security", icon: Shield })
+    sidebarLinks.push({ to: "/dashboard/admin/users", label: t("Users"), icon: UserCog })
+    sidebarLinks.push({ to: "/dashboard/admin/categories", label: t("Categories"), icon: Layers })
+    sidebarLinks.push({ to: "/dashboard/admin/venues", label: t("Venues"), icon: Building2 })
+    sidebarLinks.push({ to: "/dashboard/admin/files", label: t("Files"), icon: FileUp })
+    sidebarLinks.push({ to: "/dashboard/admin/reports", label: t("Reports"), icon: BarChart3 })
+    sidebarLinks.push({ to: "/dashboard/admin/broadcast", label: t("Broadcast"), icon: Megaphone })
+    sidebarLinks.push({ to: "/dashboard/admin/password-resets", label: t("Password Resets"), icon: KeyRound })
+    sidebarLinks.push({ to: "/dashboard/admin/settings", label: t("Settings"), icon: Settings })
+    sidebarLinks.push({ to: "/dashboard/admin/security", label: t("Security"), icon: Shield })
   }
 
   const isActive = (path: string) => location.pathname === path || location.pathname.startsWith(path + "/")
 
   return (
     <div className="flex h-screen bg-background">
-      <aside className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-border transform transition-transform lg:relative lg:translate-x-0 bg-white/90 dark:bg-card/90 backdrop-blur-xl ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}>
+      <aside className={`fixed inset-y-0 start-0 z-50 w-64 border-e border-border transform transition-transform lg:relative lg:translate-x-0 bg-white/90 dark:bg-card/90 backdrop-blur-xl ${sidebarOpen ? "translate-x-0" : "ltr:-translate-x-full rtl:translate-x-full"} lg:translate-x-0`}>
         <div className="flex items-center justify-between h-16 px-6 border-b border-border">
-          <Link to="/dashboard" className="text-xl font-bold">
+          <Link to="/dashboard" className="flex items-center gap-2 text-xl font-bold">
+            {logoUrl && <img src={logoUrl} alt="" className="h-7 w-auto" />}
             <span className="bg-gradient-to-r from-[hsl(185,85%,38%)] via-[hsl(165,80%,40%)] to-[hsl(35,92%,52%)] bg-clip-text text-transparent">
-              EventFlow
+              {appName}
             </span>
           </Link>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-muted-foreground hover:text-foreground">
@@ -89,7 +111,7 @@ export function AppLayout() {
               to={link.to}
               className={`flex items-center gap-3 px-3 py-2 rounded-lg transition-colors relative ${
                 isActive(link.to)
-                  ? "text-primary bg-gradient-to-r from-teal-500/10 to-amber-500/10 font-medium before:absolute before:left-0 before:top-1/4 before:h-1/2 before:w-0.5 before:rounded-full before:bg-gradient-to-b before:from-teal-500 before:to-amber-500"
+                  ? "text-primary bg-gradient-to-r from-teal-500/10 to-amber-500/10 font-medium before:absolute before:start-0 before:top-1/4 before:h-1/2 before:w-0.5 before:rounded-full before:bg-gradient-to-b before:from-teal-500 before:to-amber-500"
                   : "text-muted-foreground hover:text-foreground hover:bg-accent/50"
               }`}
             >
@@ -107,7 +129,8 @@ export function AppLayout() {
           <button onClick={() => setSidebarOpen(true)} className="lg:hidden text-muted-foreground hover:text-foreground">
             <Menu size={20} />
           </button>
-          <div className="flex items-center gap-3 ml-auto">
+          <div className="flex items-center gap-3 ms-auto">
+            <LanguageSwitcher />
             <button onClick={toggleTheme} className="p-2 text-muted-foreground hover:text-foreground transition-colors rounded-lg hover:bg-accent/50">
               {theme === "light" ? <Moon size={18} /> : <Sun size={18} />}
             </button>
@@ -123,28 +146,28 @@ export function AppLayout() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-80">
                 <div className="flex items-center justify-between px-3 py-2 border-b border-border">
-                  <span className="text-sm font-medium">Notifications</span>
+                  <span className="text-sm font-medium">{t("Notifications")}</span>
                   {unread > 0 && (
                     <Button size="sm" variant="ghost" className="h-auto text-xs py-0.5" onClick={handleMarkAllRead}>
-                      Mark all read
+                      {t("Mark all read")}
                     </Button>
                   )}
                 </div>
                 <div className="max-h-72 overflow-y-auto">
                   {recentNotifs.length === 0 ? (
-                    <p className="text-sm text-muted-foreground text-center py-6">No notifications</p>
+                    <p className="text-sm text-muted-foreground text-center py-6">{t("No notifications")}</p>
                   ) : (
                     recentNotifs.map((n) => (
                       <div key={n.id} className={`px-3 py-2.5 border-b border-border last:border-0 ${!n.readAt ? "bg-primary/5" : ""}`}>
                         <p className="text-sm">{n.message}</p>
-                        <p className="text-[11px] text-muted-foreground mt-0.5">{new Date(n.createdAt).toLocaleDateString()}</p>
+                        <p className="text-[11px] text-muted-foreground mt-0.5">{formatDate(new Date(n.createdAt))}</p>
                       </div>
                     ))
                   )}
                 </div>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onSelect={() => { navigate("/dashboard/notifications"); setNotifOpen(false) }}>
-                  <Bell size={16} /> View all notifications
+                  <Bell size={16} /> {t("View all notifications")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>
@@ -154,7 +177,7 @@ export function AppLayout() {
                 <Avatar className="h-7 w-7 ring-2 ring-teal-500/30">
                   <AvatarFallback className="text-xs bg-gradient-to-br from-teal-500/20 to-amber-500/20">{initials}</AvatarFallback>
                 </Avatar>
-                <div className="hidden sm:block text-left">
+                <div className="hidden sm:block text-start">
                   <p className="text-sm font-medium leading-tight">{profile?.firstName} {profile?.lastName}</p>
                   <p className="text-xs text-muted-foreground capitalize leading-tight">{role}</p>
                 </div>
@@ -162,15 +185,15 @@ export function AppLayout() {
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-48">
                 <DropdownMenuItem onClick={() => navigate("/dashboard/profile")}>
-                  <User size={16} /> Profile
+                  <User size={16} /> {t("Profile")}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={toggleTheme}>
-                  {theme === "light" ? <Moon size={16} /> : <Sun size={16} />} Toggle theme
+                  {theme === "light" ? <Moon size={16} /> : <Sun size={16} />} {t("Toggle theme")}
                 </DropdownMenuItem>
                 <DropdownMenuSeparator />
                 <DropdownMenuItem onClick={handleLogout} className="text-destructive focus:text-destructive">
-                  <LogOut size={16} /> Logout
+                  <LogOut size={16} /> {t("Logout")}
                 </DropdownMenuItem>
               </DropdownMenuContent>
             </DropdownMenu>

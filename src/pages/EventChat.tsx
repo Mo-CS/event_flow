@@ -1,3 +1,5 @@
+import { formatTime } from "../i18n/format"
+import { t } from "../i18n"
 import { useState, useEffect, useRef, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { ArrowLeft, Send, Users, UserCircle, Loader2, MessageSquare } from "lucide-react"
@@ -40,7 +42,7 @@ export function EventChat() {
       setMessages(msgs)
       setError(null)
     } catch (e: any) {
-      setError(e.message ?? "Could not load messages")
+      setError(e.message ?? t("Could not load messages"))
     }
   }, [user?.id, profile?.id])
 
@@ -62,7 +64,7 @@ export function EventChat() {
       }
       setError(null)
     } catch (e: any) {
-      setError(e.message ?? "Could not load the chat")
+      setError(e.message ?? t("Could not load the chat"))
     } finally {
       setLoading(false)
     }
@@ -108,13 +110,13 @@ export function EventChat() {
       setDraft("")
       await loadMessages(activeChannelId)
     } catch (e: any) {
-      toast.error(e.message ?? "Failed to send message")
+      toast.error(e.message ?? t("Failed to send message"))
     } finally {
       setSending(false)
     }
   }
 
-  if (loading) return <Loading text="Loading chat..." />
+  if (loading) return <Loading text={t("Loading chat...")} />
 
   const activeChannel = channels.find((c) => c.id === activeChannelId)
 
@@ -125,13 +127,13 @@ export function EventChat() {
       <div className="flex items-center justify-between">
         <div className="flex items-center gap-3">
           <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard/events")} className="gap-2">
-            <ArrowLeft size={16} /> Events
+            <ArrowLeft size={16} /> {t("Events")}
           </Button>
-          <h1 className="text-xl font-bold">Chat · {eventTitle}</h1>
+          <h1 className="text-xl font-bold">{t("Chat ·")} {eventTitle}</h1>
         </div>
         <span className="flex items-center gap-1.5 text-xs text-muted-foreground">
           <span className={`inline-block w-2 h-2 rounded-full ${realtimeOk ? "bg-green-500" : "bg-amber-500"}`} />
-          {realtimeOk ? "Live" : "Polling"}
+          {realtimeOk ? t("Live") : t("Polling")}
         </span>
       </div>
 
@@ -139,7 +141,7 @@ export function EventChat() {
         <div className="flex items-center justify-between gap-3 rounded-lg border border-destructive/30 bg-destructive/5 px-4 py-2.5">
           <p className="text-sm text-destructive">{error}</p>
           <Button size="sm" variant="outline" onClick={() => { if (activeChannelId) loadMessages(activeChannelId) }}>
-            Retry
+            {t("Retry")}
           </Button>
         </div>
       )}
@@ -148,7 +150,7 @@ export function EventChat() {
         {/* Channel list */}
         <aside className="w-64 border-r border-border flex flex-col bg-muted/30 overflow-y-auto">
           <div className="px-4 py-3 border-b border-border">
-            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">Channels</p>
+            <p className="text-xs font-medium uppercase tracking-wide text-muted-foreground">{t("Channels")}</p>
           </div>
           {channels.map((c) => (
             <button
@@ -184,7 +186,7 @@ export function EventChat() {
 
           <div ref={scrollRef} className="flex-1 overflow-y-auto px-4 py-4 space-y-3">
             {messages.length === 0 ? (
-              <p className="text-sm text-muted-foreground text-center py-10">No messages yet. Start the conversation!</p>
+              <p className="text-sm text-muted-foreground text-center py-10">{t("No messages yet. Start the conversation!")}</p>
             ) : (
               messages.map((m) => {
                 const mine = m.senderId === user?.id
@@ -202,7 +204,7 @@ export function EventChat() {
                       <p className="whitespace-pre-wrap break-words">{m.content}</p>
                     </div>
                     <p className="text-[10px] text-muted-foreground mt-1">
-                      {new Date(m.createdAt).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}
+                      {formatTime(new Date(m.createdAt), { hour: "2-digit", minute: "2-digit" })}
                     </p>
                   </div>
                 )
@@ -215,12 +217,12 @@ export function EventChat() {
               value={draft}
               onChange={(e) => setDraft(e.target.value)}
               onKeyDown={(e) => e.key === "Enter" && handleSend()}
-              placeholder="Type a message..."
+              placeholder={t("Type a message...")}
               className="flex-1"
             />
             <Button onClick={handleSend} disabled={sending || !draft.trim()} className="gap-2">
               {sending ? <Loader2 size={15} className="animate-spin" /> : <Send size={15} />}
-              Send
+              {t("Send")}
             </Button>
           </div>
         </div>

@@ -1,3 +1,4 @@
+import { t } from "../i18n"
 import { useState, useEffect, useCallback } from "react"
 import { Plus, Pencil, Trash2, Search, Palette } from "lucide-react"
 import { toast } from "sonner"
@@ -27,14 +28,14 @@ function CategoryForm({ category, onClose }: { category?: Category; onClose: () 
     try {
       if (category) {
         await updateCategory(category.id, { name, description, colorCode: color })
-        toast.success("Category updated")
+        toast.success(t("Category updated"))
       } else {
         await createCategory({ name, description, iconUrl: "", colorCode: color })
-        toast.success("Category created")
+        toast.success(t("Category created"))
       }
       onClose()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Something went wrong")
+      toast.error(err instanceof Error ? err.message : t("Something went wrong"))
     } finally {
       setSaving(false)
     }
@@ -43,15 +44,15 @@ function CategoryForm({ category, onClose }: { category?: Category; onClose: () 
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium mb-1">Name</label>
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="e.g. Conference" />
+        <label className="block text-sm font-medium mb-1">{t("Name")}</label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("e.g. Conference")} />
       </div>
       <div>
-        <label className="block text-sm font-medium mb-1">Description</label>
-        <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Category description" />
+        <label className="block text-sm font-medium mb-1">{t("Description")}</label>
+        <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("Category description")} />
       </div>
       <div>
-        <label className="block text-sm font-medium mb-1">Color</label>
+        <label className="block text-sm font-medium mb-1">{t("Color")}</label>
         <div className="flex flex-wrap gap-2">
           {COLORS.map((c) => (
             <button key={c} type="button" onClick={() => setColor(c)}
@@ -69,9 +70,9 @@ function CategoryForm({ category, onClose }: { category?: Category; onClose: () 
         </div>
       )}
       <DialogFooter>
-        <Button variant="outline" onClick={onClose}>Cancel</Button>
+        <Button variant="outline" onClick={onClose}>{t("Cancel")}</Button>
         <Button onClick={handleSave} disabled={saving || !name.trim()}>
-          {saving ? "Saving..." : category ? "Update" : "Create"}
+          {saving ? t("Saving...") : category ? "Update" : "Create"}
         </Button>
       </DialogFooter>
     </div>
@@ -91,7 +92,7 @@ export function CategoryManagement() {
       const data = await getCategories()
       setItems(data)
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to load")
+      toast.error(e?.message ?? t("Failed to load"))
     } finally {
       setLoading(false)
     }
@@ -106,10 +107,10 @@ export function CategoryManagement() {
   const handleDelete = async (cat: Category) => {
     try {
       await deleteCategory(cat.id)
-      toast.success(`"${cat.name}" deleted`)
+      toast.success(t("\"{name}\" deleted", { name: cat.name }))
       fetch()
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to delete category")
+      toast.error(e?.message ?? t("Failed to delete category"))
     }
   }
 
@@ -126,26 +127,26 @@ export function CategoryManagement() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Categories</h1>
-        <Button onClick={openCreate} className="gap-2"><Plus size={16} /> Add Category</Button>
+        <h1 className="text-2xl font-bold">{t("Categories")}</h1>
+        <Button onClick={openCreate} className="gap-2"><Plus size={16} /> {t("Add Category")}</Button>
       </div>
 
       <div className="relative max-w-sm">
         <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-        <Input placeholder="Search categories..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+        <Input placeholder={t("Search categories...")} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
       </div>
 
       {loading ? <Loading /> : filtered.length === 0 ? (
-        <EmptyState title={search ? "No matches" : "No categories yet"} description={search ? "Try a different search" : "Create your first category."} />
+        <EmptyState title={search ? t("No matches") : t("No categories yet")} description={search ? t("Try a different search") : t("Create your first category.")} />
       ) : (
         <div className="rounded-lg border border-border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Color</TableHead>
-                <TableHead>Name</TableHead>
-                <TableHead>Description</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("Color")}</TableHead>
+                <TableHead>{t("Name")}</TableHead>
+                <TableHead>{t("Description")}</TableHead>
+                <TableHead className="text-right">{t("Actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -172,7 +173,7 @@ export function CategoryManagement() {
       <Dialog open={dialogOpen} onOpenChange={setDialogOpen}>
         <DialogContent>
           <DialogHeader>
-            <DialogTitle>{editing ? "Edit Category" : "Create Category"}</DialogTitle>
+            <DialogTitle>{editing ? t("Edit Category") : t("Create Category")}</DialogTitle>
           </DialogHeader>
           <CategoryForm key={editing?.id ?? "new"} category={editing} onClose={() => { setDialogOpen(false); fetch() }} />
         </DialogContent>

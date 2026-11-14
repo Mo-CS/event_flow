@@ -1,3 +1,5 @@
+import { formatDate } from "../i18n/format"
+import { roleLabel, t } from "../i18n"
 import { useState, useEffect } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { ArrowLeft, Mail, Phone, Calendar, Shield } from "lucide-react"
@@ -32,13 +34,13 @@ export function UserDetail() {
       setRoles(rolesData)
       setLoading(false)
     }).catch((e: any) => {
-      toast.error(e?.message ?? "Failed to load user")
+      toast.error(e?.message ?? t("Failed to load user"))
       setLoading(false)
     })
   }, [id])
 
-  if (loading) return <Loading text="Loading user..." />
-  if (!user) return <div className="text-center py-20 text-muted-foreground">User not found</div>
+  if (loading) return <Loading text={t("Loading user...")} />
+  if (!user) return <div className="text-center py-20 text-muted-foreground">{t("User not found")}</div>
 
   const initials = `${user.profile?.firstName?.[0] ?? ""}${user.profile?.lastName?.[0] ?? ""}`
 
@@ -48,9 +50,9 @@ export function UserDetail() {
       const updated = await getUserById(user.id)
       if (updated) setUser(updated)
       setEditing(false)
-      toast.success("User updated")
+      toast.success(t("User updated"))
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to save user")
+      toast.error(e?.message ?? t("Failed to save user"))
     }
   }
 
@@ -59,9 +61,9 @@ export function UserDetail() {
       await suspendUser(user.id)
       const updated = await getUserById(user.id)
       if (updated) setUser(updated)
-      toast.success("User suspended")
+      toast.success(t("User suspended"))
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to suspend user")
+      toast.error(e?.message ?? t("Failed to suspend user"))
     }
   }
 
@@ -70,16 +72,16 @@ export function UserDetail() {
       await activateUser(user.id)
       const updated = await getUserById(user.id)
       if (updated) setUser(updated)
-      toast.success("User activated")
+      toast.success(t("User activated"))
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to activate user")
+      toast.error(e?.message ?? t("Failed to activate user"))
     }
   }
 
   return (
     <div className="max-w-2xl space-y-6">
       <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard")} className="gap-2">
-        <ArrowLeft size={16} /> Back to Admin
+        <ArrowLeft size={16} /> {t("Back to Admin")}
       </Button>
 
       <Card>
@@ -93,28 +95,28 @@ export function UserDetail() {
                 <div className="flex items-center gap-2">
                   <h2 className="text-xl font-bold">{user.profile?.firstName} {user.profile?.lastName}</h2>
                   <Badge variant={user.suspended ? "destructive" : "secondary"}>
-                    {user.suspended ? "Suspended" : "Active"}
+                    {user.suspended ? t("Suspended") : t("Active")}
                   </Badge>
                 </div>
                 <Badge variant={user.roleName === "admin" ? "default" : user.roleName === "organizer" ? "secondary" : "outline"} className="mt-1">
-                  {user.roleName}
+                  {roleLabel(user.roleName)}
                 </Badge>
               </div>
             </div>
             <div className="flex gap-2">
               {editing ? (
                 <>
-                  <Button size="sm" variant="outline" onClick={() => setEditing(false)}>Cancel</Button>
-                  <Button size="sm" onClick={handleSave}>Save</Button>
+                  <Button size="sm" variant="outline" onClick={() => setEditing(false)}>{t("Cancel")}</Button>
+                  <Button size="sm" onClick={handleSave}>{t("Save")}</Button>
                 </>
               ) : (
                 <>
                   {user.suspended ? (
-                    <Button size="sm" onClick={handleActivate}>Activate</Button>
+                    <Button size="sm" onClick={handleActivate}>{t("Activate")}</Button>
                   ) : (
-                    <Button size="sm" variant="outline" className="text-destructive" onClick={handleSuspend}>Suspend</Button>
+                    <Button size="sm" variant="outline" className="text-destructive" onClick={handleSuspend}>{t("Suspend")}</Button>
                   )}
-                  <Button size="sm" variant="outline" onClick={() => setEditing(true)}>Edit</Button>
+                  <Button size="sm" variant="outline" onClick={() => setEditing(true)}>{t("Edit")}</Button>
                 </>
               )}
             </div>
@@ -124,14 +126,14 @@ export function UserDetail() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Details</CardTitle>
+          <CardTitle>{t("Details")}</CardTitle>
         </CardHeader>
         <CardContent className="space-y-4">
           {editing ? (
             <div className="space-y-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                  <label className="block text-sm font-medium mb-1">First name</label>
+                  <label className="block text-sm font-medium mb-1">{t("First name")}</label>
                   <input
                     value={form.firstName}
                     onChange={(e) => setForm((f) => ({ ...f, firstName: e.target.value }))}
@@ -139,7 +141,7 @@ export function UserDetail() {
                   />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Last name</label>
+                  <label className="block text-sm font-medium mb-1">{t("Last name")}</label>
                   <input
                     value={form.lastName}
                     onChange={(e) => setForm((f) => ({ ...f, lastName: e.target.value }))}
@@ -148,7 +150,7 @@ export function UserDetail() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Role</label>
+                <label className="block text-sm font-medium mb-1">{t("Role")}</label>
                 <select
                   value={form.roleId}
                   onChange={(e) => setForm((f) => ({ ...f, roleId: e.target.value }))}
@@ -168,15 +170,15 @@ export function UserDetail() {
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <Phone size={16} className="text-muted-foreground" />
-                <span>{user.profile?.phoneNumber || "Not provided"}</span>
+                <span>{user.profile?.phoneNumber || t("Not provided")}</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <Calendar size={16} className="text-muted-foreground" />
-                <span>Joined {new Date(user.createdAt).toLocaleDateString()}</span>
+                <span>{t("Joined")} {formatDate(new Date(user.createdAt))}</span>
               </div>
               <div className="flex items-center gap-3 text-sm">
                 <Shield size={16} className="text-muted-foreground" />
-                <span className="capitalize">{user.roleName}</span>
+                <span className="capitalize">{roleLabel(user.roleName)}</span>
               </div>
             </>
           )}

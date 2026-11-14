@@ -1,3 +1,5 @@
+import { formatTime } from "../i18n/format"
+import { t } from "../i18n"
 import { useState, useEffect, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { Plus, Pencil, Trash2, ArrowLeft, AlertTriangle, Clock, MapPin, User } from "lucide-react"
@@ -48,14 +50,14 @@ function SessionForm({ eventId, session, onClose }: { eventId: string; session?:
       }
       if (session) {
         await updateSession(session.id, data)
-        toast.success("Session updated")
+        toast.success(t("Session updated"))
       } else {
         await createSession(data)
-        toast.success("Session created")
+        toast.success(t("Session created"))
       }
       onClose()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Something went wrong")
+      toast.error(err instanceof Error ? err.message : t("Something went wrong"))
     } finally {
       setSaving(false)
     }
@@ -64,43 +66,43 @@ function SessionForm({ eventId, session, onClose }: { eventId: string; session?:
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium mb-1">Title</label>
-        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder="Session title" />
+        <label className="block text-sm font-medium mb-1">{t("Title")}</label>
+        <Input value={title} onChange={(e) => setTitle(e.target.value)} placeholder={t("Session title")} />
       </div>
       <div>
-        <label className="block text-sm font-medium mb-1">Description</label>
-        <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder="Session description" />
+        <label className="block text-sm font-medium mb-1">{t("Description")}</label>
+        <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t("Session description")} />
       </div>
       <div className="grid sm:grid-cols-2 gap-4">
         <div>
-          <label className="block text-sm font-medium mb-1">Start time</label>
+          <label className="block text-sm font-medium mb-1">{t("Start time")}</label>
           <Input type="datetime-local" value={startTime} onChange={(e) => setStartTime(e.target.value)} />
         </div>
         <div>
-          <label className="block text-sm font-medium mb-1">End time</label>
+          <label className="block text-sm font-medium mb-1">{t("End time")}</label>
           <Input type="datetime-local" value={endTime} onChange={(e) => setEndTime(e.target.value)} />
         </div>
       </div>
       <div>
-        <label className="block text-sm font-medium mb-1">Room</label>
-        <Input value={roomName} onChange={(e) => setRoomName(e.target.value)} placeholder="e.g. Main Hall" />
+        <label className="block text-sm font-medium mb-1">{t("Room")}</label>
+        <Input value={roomName} onChange={(e) => setRoomName(e.target.value)} placeholder={t("e.g. Main Hall")} />
       </div>
       {conflicts.length > 0 && (
         <div className="p-3 rounded-lg bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800">
           <div className="flex items-center gap-2 text-sm font-medium text-yellow-800 dark:text-yellow-200">
-            <AlertTriangle size={16} /> Scheduling Conflict Detected
+            <AlertTriangle size={16} /> {t("Scheduling Conflict Detected")}
           </div>
           <ul className="mt-1 text-xs text-yellow-700 dark:text-yellow-300 list-disc list-inside">
             {conflicts.map((c) => (
-              <li key={c.id}>{c.title} ({c.roomName}) — {new Date(c.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</li>
+              <li key={c.id}>{c.title} ({c.roomName}) — {formatTime(new Date(c.startTime), { hour: '2-digit', minute: '2-digit' })}</li>
             ))}
           </ul>
         </div>
       )}
       <DialogFooter>
-        <Button variant="outline" onClick={onClose}>Cancel</Button>
+        <Button variant="outline" onClick={onClose}>{t("Cancel")}</Button>
         <Button onClick={handleSave} disabled={saving || !title.trim() || !startTime || !endTime}>
-          {saving ? "Saving..." : session ? "Update" : "Create"}
+          {saving ? t("Saving...") : session ? "Update" : "Create"}
         </Button>
       </DialogFooter>
     </div>
@@ -119,14 +121,14 @@ function SpeakerForm({ sessionId, speaker, onClose }: { sessionId: string; speak
       const data = { sessionId, name, bio, imageUrl: speaker?.imageUrl ?? "" }
       if (speaker) {
         await updateSpeaker(speaker.id, data)
-        toast.success("Speaker updated")
+        toast.success(t("Speaker updated"))
       } else {
         await createSpeaker(data)
-        toast.success("Speaker added")
+        toast.success(t("Speaker added"))
       }
       onClose()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Something went wrong")
+      toast.error(err instanceof Error ? err.message : t("Something went wrong"))
     } finally {
       setSaving(false)
     }
@@ -135,20 +137,20 @@ function SpeakerForm({ sessionId, speaker, onClose }: { sessionId: string; speak
   return (
     <div className="space-y-4">
       <div>
-        <label className="block text-sm font-medium mb-1">Name</label>
-        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Speaker name" />
+        <label className="block text-sm font-medium mb-1">{t("Name")}</label>
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t("Speaker name")} />
       </div>
       <div>
-        <label className="block text-sm font-medium mb-1">Bio</label>
+        <label className="block text-sm font-medium mb-1">{t("Bio")}</label>
         <textarea value={bio} onChange={(e) => setBio(e.target.value)} rows={3}
           className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
-          placeholder="Brief biography"
+          placeholder={t("Brief biography")}
         />
       </div>
       <DialogFooter>
-        <Button variant="outline" onClick={onClose}>Cancel</Button>
+        <Button variant="outline" onClick={onClose}>{t("Cancel")}</Button>
         <Button onClick={handleSave} disabled={saving || !name.trim()}>
-          {saving ? "Saving..." : speaker ? "Update" : "Add"}
+          {saving ? t("Saving...") : speaker ? "Update" : "Add"}
         </Button>
       </DialogFooter>
     </div>
@@ -182,7 +184,7 @@ export function ScheduleManagement() {
       for (const s of sess) { map[s.id] = await getSpeakersBySession(s.id) }
       setSpeakersMap(map)
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to load")
+      toast.error(e?.message ?? t("Failed to load"))
     } finally {
       setLoading(false)
     }
@@ -190,21 +192,21 @@ export function ScheduleManagement() {
 
   useEffect(() => { fetch() }, [fetch])
 
-  if (loading) return <Loading text="Loading schedule..." />
+  if (loading) return <Loading text={t("Loading schedule...")} />
 
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard/events")} className="gap-2">
-        <ArrowLeft size={16} /> Back to Events
+        <ArrowLeft size={16} /> {t("Back to Events")}
       </Button>
 
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Schedule: {eventTitle}</h1>
-        <Button onClick={() => { setEditingSession(undefined); setSessionDialog(true) }} className="gap-2"><Plus size={16} /> Add Session</Button>
+        <h1 className="text-2xl font-bold">{t("Schedule:")} {eventTitle}</h1>
+        <Button onClick={() => { setEditingSession(undefined); setSessionDialog(true) }} className="gap-2"><Plus size={16} /> {t("Add Session")}</Button>
       </div>
 
       {sessions.length === 0 ? (
-        <EmptyState title="No sessions yet" description="Add your first session to build the event agenda." />
+        <EmptyState title={t("No sessions yet")} description={t("Add your first session to build the event agenda.")} />
       ) : (
         <div className="space-y-4">
           {sessions.map((session) => {
@@ -215,7 +217,7 @@ export function ScheduleManagement() {
                   <div>
                     <CardTitle className="text-lg">{session.title}</CardTitle>
                     <div className="flex flex-wrap gap-3 mt-2 text-sm text-muted-foreground">
-                      <span className="flex items-center gap-1"><Clock size={14} /> {new Date(session.startTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })} — {new Date(session.endTime).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}</span>
+                      <span className="flex items-center gap-1"><Clock size={14} /> {formatTime(new Date(session.startTime), { hour: '2-digit', minute: '2-digit' })} — {formatTime(new Date(session.endTime), { hour: '2-digit', minute: '2-digit' })}</span>
                       <span className="flex items-center gap-1"><MapPin size={14} /> {session.roomName}</span>
                     </div>
                   </div>
@@ -224,10 +226,10 @@ export function ScheduleManagement() {
                     <Button size="sm" variant="ghost" className="text-destructive" onClick={async () => {
                       try {
                         await deleteSession(session.id)
-                        toast.success("Session deleted")
+                        toast.success(t("Session deleted"))
                         fetch()
                       } catch (e: any) {
-                        toast.error(e?.message ?? "Failed to delete session")
+                        toast.error(e?.message ?? t("Failed to delete session"))
                       }
                     }}><Trash2 size={14} /></Button>
                   </div>
@@ -237,11 +239,11 @@ export function ScheduleManagement() {
                 </CardContent>}
                 <CardContent className={session.description ? "pt-0" : ""}>
                   <div className="flex items-center justify-between mb-2">
-                    <h4 className="text-sm font-medium flex items-center gap-1"><User size={14} /> Speakers</h4>
-                    <Button size="sm" variant="ghost" onClick={() => { setSpeakerDialog(session.id); setEditingSpeaker(undefined) }}><Plus size={14} /> Add</Button>
+                    <h4 className="text-sm font-medium flex items-center gap-1"><User size={14} /> {t("Speakers")}</h4>
+                    <Button size="sm" variant="ghost" onClick={() => { setSpeakerDialog(session.id); setEditingSpeaker(undefined) }}><Plus size={14} /> {t("Add")}</Button>
                   </div>
                   {sp.length === 0 ? (
-                    <p className="text-xs text-muted-foreground">No speakers assigned</p>
+                    <p className="text-xs text-muted-foreground">{t("No speakers assigned")}</p>
                   ) : (
                     <div className="space-y-2">
                       {sp.map((speaker) => (
@@ -255,10 +257,10 @@ export function ScheduleManagement() {
                             <Button size="sm" variant="ghost" className="text-destructive" onClick={async () => {
                               try {
                                 await deleteSpeaker(speaker.id)
-                                toast.success("Speaker removed")
+                                toast.success(t("Speaker removed"))
                                 fetch()
                               } catch (e: any) {
-                                toast.error(e?.message ?? "Failed to remove speaker")
+                                toast.error(e?.message ?? t("Failed to remove speaker"))
                               }
                             }}><Trash2 size={12} /></Button>
                           </div>
@@ -275,14 +277,14 @@ export function ScheduleManagement() {
 
       <Dialog open={sessionDialog} onOpenChange={setSessionDialog}>
         <DialogContent className="max-w-lg">
-          <DialogHeader><DialogTitle>{editingSession ? "Edit Session" : "Add Session"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingSession ? t("Edit Session") : t("Add Session")}</DialogTitle></DialogHeader>
           <SessionForm key={editingSession?.id ?? "new"} eventId={eventId!} session={editingSession} onClose={() => { setSessionDialog(false); fetch() }} />
         </DialogContent>
       </Dialog>
 
       <Dialog open={!!speakerDialog} onOpenChange={(open) => { if (!open) setSpeakerDialog(null) }}>
         <DialogContent>
-          <DialogHeader><DialogTitle>{editingSpeaker ? "Edit Speaker" : "Add Speaker"}</DialogTitle></DialogHeader>
+          <DialogHeader><DialogTitle>{editingSpeaker ? t("Edit Speaker") : t("Add Speaker")}</DialogTitle></DialogHeader>
           {speakerDialog && (
             <SpeakerForm key={editingSpeaker?.id ?? "new"} sessionId={speakerDialog} speaker={editingSpeaker} onClose={() => { setSpeakerDialog(null); fetch() }} />
           )}

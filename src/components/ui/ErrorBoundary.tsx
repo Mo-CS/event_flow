@@ -1,3 +1,4 @@
+import { t } from "../../i18n"
 import { Component, type ErrorInfo, type ReactNode } from "react"
 import { AlertTriangle } from "lucide-react"
 
@@ -31,15 +32,15 @@ export class ErrorBoundary extends Component<ErrorBoundaryProps, ErrorBoundarySt
       return (
         <div className="flex flex-col items-center justify-center gap-4 py-20 text-center">
           <AlertTriangle size={48} className="text-destructive" />
-          <h2 className="text-xl font-semibold">Something went wrong</h2>
+          <h2 className="text-xl font-semibold">{t("Something went wrong")}</h2>
           <p className="text-sm text-muted-foreground max-w-md">
-            {this.state.error?.message ?? "An unexpected error occurred."}
+            {this.state.error?.message ?? t("An unexpected error occurred.")}
           </p>
           <button
             onClick={() => this.setState({ hasError: false, error: null })}
             className="bg-primary text-primary-foreground px-4 py-2 rounded-lg text-sm hover:opacity-90"
           >
-            Try again
+            {t("Try again")}
           </button>
         </div>
       )

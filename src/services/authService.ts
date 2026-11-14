@@ -1,3 +1,4 @@
+import { t } from "../i18n"
 import { supabase } from "../lib/supabase"
 import { sha256 } from "js-sha256"
 import type { User, Profile, RoleName } from "../types"
@@ -13,7 +14,7 @@ interface AuthResult {
 
 function parseAuthResult(result: any): AuthResult {
   if (!result || result.error) {
-    throw new Error(result?.error ?? "Authentication failed")
+    throw new Error(result?.error ?? t("Authentication failed"))
   }
   return {
     user: {
@@ -22,6 +23,10 @@ function parseAuthResult(result: any): AuthResult {
       createdAt: result.user.created_at,
       updatedAt: result.user.updated_at,
       suspended: result.user.suspended ?? undefined,
+      mustChangePassword: result.user.must_change_password ?? false,
+      deletedAt: result.user.deleted_at ?? undefined,
+      scheduledDeletionAt: result.user.scheduled_deletion_at ?? undefined,
+      deletionReason: result.user.deletion_reason ?? undefined,
     },
     profile: {
       id: result.profile.id,
@@ -38,7 +43,7 @@ function parseAuthResult(result: any): AuthResult {
 }
 
 const LEGACY_SESSION_KEY = "eventflow_session_legacy"
-const UNAVAILABLE = "This feature is not available yet — the database schema has not been upgraded"
+const UNAVAILABLE_KEY = "This feature is not available yet — the database schema has not been upgraded"
 
 // ---------------------------------------------------------------------------
 // Legacy (pre-schema) support.
@@ -136,7 +141,7 @@ async function fetchLegacyUserByEmail(email: string): Promise<LegacyUserRow | nu
     .select(`id, email, password_hash, suspended, created_at, updated_at, ${PROFILE_SELECT}`)
     .ilike("email", email.trim())
     .maybeSingle()
-  if (error) throw new Error("Invalid email or password")
+  if (error) throw new Error(t("Invalid email or password"))
   return (data as LegacyUserRow) ?? null
 }
 
@@ -146,17 +151,17 @@ async function fetchLegacyUserById(id: string): Promise<LegacyUserRow | null> {
     .select(`id, email, suspended, created_at, updated_at, ${PROFILE_SELECT}`)
     .eq("id", id)
     .maybeSingle()
-  if (error) throw new Error("Session expired")
+  if (error) throw new Error(t("Session expired"))
   return (data as LegacyUserRow) ?? null
 }
 
 async function legacyLogin(email: string, password: string): Promise<AuthResult> {
   const row = await fetchLegacyUserByEmail(email)
-  if (!row?.password_hash) throw new Error("Invalid email or password")
+  if (!row?.password_hash) throw new Error(t("Invalid email or password"))
   if (sha256(password).toLowerCase() !== row.password_hash.toLowerCase()) {
-    throw new Error("Invalid email or password")
+    throw new Error(t("Invalid email or password"))
   }
-  if (row.suspended) throw new Error("Account suspended")
+  if (row.suspended) throw new Error(t("Account suspended"))
   const result = legacyToAuthResult(row)
   persistLegacySession(result)
   logAction(result.user.id, "login", "user", result.user.id, "Logged in").catch(() => {})
@@ -165,19 +170,19 @@ async function legacyLogin(email: string, password: string): Promise<AuthResult>
 
 async function legacyRegister(email: string, password: string, firstName: string, lastName: string): Promise<AuthResult> {
   const { data: roleRow } = await supabase.from("roles").select("id").eq("name", "attendee").maybeSingle()
-  if (!roleRow) throw new Error("Registration failed")
+  if (!roleRow) throw new Error(t("Registration failed"))
 
   const { error: userError } = await supabase
     .from("users")
     .insert({ email: email.trim().toLowerCase(), password_hash: sha256(password) })
-  if (userError) throw new Error(userError.message ?? "Registration failed")
+  if (userError) throw new Error(userError.message ?? t("Registration failed"))
 
   const { data: user, error: selectError } = await supabase
     .from("users")
     .select("id, email, created_at, updated_at, suspended")
     .eq("email", email.trim().toLowerCase())
     .single()
-  if (selectError || !user) throw new Error("Registration failed")
+  if (selectError || !user) throw new Error(t("Registration failed"))
 
   const { data: profile, error: profileError } = await supabase
     .from("profiles")
@@ -191,7 +196,7 @@ async function legacyRegister(email: string, password: string, firstName: string
     })
     .select("id, user_id, first_name, last_name, phone_number, avatar_url, role_id")
     .single()
-  if (profileError || !profile) throw new Error("Registration failed")
+  if (profileError || !profile) throw new Error(t("Registration failed"))
 
   const result: AuthResult = {
     user: {
@@ -220,11 +225,11 @@ async function legacyRegister(email: string, password: string, firstName: string
 
 async function legacyRestoreSession(): Promise<AuthResult> {
   const snapshot = readLegacySession()
-  if (!snapshot) throw new Error("Session expired")
+  if (!snapshot) throw new Error(t("Session expired"))
   const row = await fetchLegacyUserById(snapshot.user.id)
   if (!row || row.suspended) {
     clearLegacySession()
-    throw new Error("Session expired")
+    throw new Error(t("Session expired"))
   }
   return {
     user: {
@@ -241,7 +246,7 @@ async function legacyRestoreSession(): Promise<AuthResult> {
 
 async function legacyGetProfileByEmail(email: string): Promise<AuthResult> {
   const row = await fetchLegacyUserByEmail(email)
-  if (!row) throw new Error("User not found")
+  if (!row) throw new Error(t("User not found"))
   return legacyToAuthResult(row)
 }
 
@@ -260,7 +265,9 @@ export async function login(email: string, password: string): Promise<AuthResult
       p_password: password,
     })
     if (isMissingFunction(error)) return legacyLogin(email, password)
-    if (error || !data || data.error) throw new Error("Invalid email or password")
+    if (error || !data || data.error) {
+      throw new Error(data?.error ?? error?.message ?? t("Invalid email or password"))
+    }
     const result = parseAuthResult(data)
     logAction(result.user.id, "login", "user", result.user.id, "Logged in").catch(() => {})
     return result
@@ -272,7 +279,7 @@ export async function getProfileByEmail(email: string): Promise<AuthResult> {
     p_email: email,
   })
   if (isMissingFunction(error)) return legacyGetProfileByEmail(email)
-  if (error) throw new Error("User not found")
+  if (error) throw new Error(t("User not found"))
   return parseAuthResult(data)
 }
 
@@ -285,7 +292,7 @@ export async function register(email: string, password: string, firstName: strin
       p_last_name: lastName,
     })
     if (isMissingFunction(error)) return legacyRegister(email, password, firstName, lastName)
-    if (error || !data || data.error) throw new Error(data?.error ?? error?.message ?? "Registration failed")
+    if (error || !data || data.error) throw new Error(data?.error ?? error?.message ?? t("Registration failed"))
     const result = parseAuthResult(data)
     logAction(result.user.id, "register", "user", result.user.id, "Account registered").catch(() => {})
     return result
@@ -297,7 +304,7 @@ export async function restoreSession(token: string): Promise<AuthResult> {
     p_token: token,
   })
   if (isMissingFunction(error)) return legacyRestoreSession()
-  if (error) throw new Error("Session expired")
+  if (error) throw new Error(t("Session expired"))
   return parseAuthResult(data)
 }
 
@@ -330,8 +337,8 @@ export interface PasswordResetRequest {
 
 export async function requestPasswordReset(email: string): Promise<PasswordResetRequest> {
   const { data, error } = await supabase.rpc("request_password_reset", { p_email: email })
-  if (isMissingFunction(error)) throw new Error(UNAVAILABLE)
-  if (error || !data) throw new Error(error?.message ?? "Failed to request password reset")
+  if (isMissingFunction(error)) throw new Error(t(UNAVAILABLE_KEY))
+  if (error || !data) throw new Error(error?.message ?? t("Failed to request password reset"))
   return data as PasswordResetRequest
 }
 
@@ -340,8 +347,8 @@ export async function resetPasswordWithToken(token: string, newPassword: string)
     p_token: token,
     p_new_password: newPassword,
   })
-  if (isMissingFunction(error)) throw new Error(UNAVAILABLE)
+  if (isMissingFunction(error)) throw new Error(t(UNAVAILABLE_KEY))
   if (error || !data || data.error) {
-    throw new Error(data?.error ?? error?.message ?? "Failed to reset password")
+    throw new Error(data?.error ?? error?.message ?? t("Failed to reset password"))
   }
 }

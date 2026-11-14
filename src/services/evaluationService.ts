@@ -1,3 +1,4 @@
+import { t } from "../i18n"
 import { supabase } from "../lib/supabase"
 import { isMissingFunction } from "../lib/supabaseErrors"
 import type {
@@ -77,7 +78,7 @@ export async function createEvaluation(
   createdBy: string,
 ): Promise<Evaluation> {
   const existing = await getEvaluationByEvent(eventId)
-  if (existing) throw new Error("This event already has an evaluation")
+  if (existing) throw new Error(t("This event already has an evaluation"))
 
   const { data: inserted, error } = await supabase
     .from("evaluations")
@@ -115,7 +116,7 @@ export async function updateEvaluation(
   },
 ): Promise<Evaluation | undefined> {
   const existing = await getEvaluationByEvent(eventId)
-  if (!existing) throw new Error("Evaluation not found")
+  if (!existing) throw new Error(t("Evaluation not found"))
 
   const payload: Record<string, unknown> = {}
   if (data.title !== undefined) payload.title = data.title
@@ -221,7 +222,7 @@ export async function submitEvaluation(
     p_is_public: data.isPublic,
     p_answers: data.answers,
   })
-  if (isMissingFunction(error)) throw new Error("Evaluation submission is not available yet — the database schema has not been upgraded")
+  if (isMissingFunction(error)) throw new Error(t("Evaluation submission is not available yet — the database schema has not been upgraded"))
   if (error) throw error
   if (result?.error) throw new Error(result.error)
   return true

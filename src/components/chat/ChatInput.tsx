@@ -1,3 +1,4 @@
+import { t } from "../../i18n"
 import { useState, useRef, type KeyboardEvent } from "react"
 import { Send } from "lucide-react"
 import { cn } from "../../lib/utils"
@@ -32,7 +33,7 @@ export default function ChatInput({ onSend, disabled }: ChatInputProps) {
         value={value}
         onChange={(e) => setValue(e.target.value)}
         onKeyDown={handleKeyDown}
-        placeholder="Ask about events, venues, categories..."
+        placeholder={t("Ask about events, venues, categories...")}
         disabled={disabled}
         rows={1}
         className={cn(

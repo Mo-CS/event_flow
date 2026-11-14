@@ -1,3 +1,5 @@
+import { formatNumber } from "../i18n/format"
+import { t } from "../i18n"
 import { useState, useEffect, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { ArrowLeft, Plus, Trash2, Pencil, Download, TrendingUp, TrendingDown, Wallet } from "lucide-react"
@@ -64,7 +66,7 @@ export function EventCosts() {
         setNameMap(map)
       }
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to load")
+      toast.error(e?.message ?? t("Failed to load"))
     } finally {
       setLoading(false)
     }
@@ -83,7 +85,7 @@ export function EventCosts() {
     const qty = Number(editor.quantity)
     const price = Number(editor.unitPrice)
     if (!editor.item.trim() || !(qty > 0) || !(price >= 0)) {
-      toast.error("Please fill item, quantity and unit price")
+      toast.error(t("Please fill item, quantity and unit price"))
       return
     }
     setSaving(true)
@@ -96,7 +98,7 @@ export function EventCosts() {
           unitPrice: price,
           notes: editor.notes.trim(),
         }, user.id)
-        toast.success("Cost updated")
+        toast.success(t("Cost updated"))
       } else {
         await createCost(eventId, costType, {
           item: editor.item.trim(),
@@ -105,12 +107,12 @@ export function EventCosts() {
           unitPrice: price,
           notes: editor.notes.trim(),
         }, user.id)
-        toast.success("Cost added")
+        toast.success(t("Cost added"))
       }
       setEditor(null)
       fetch()
     } catch {
-      toast.error("Failed to save cost")
+      toast.error(t("Failed to save cost"))
     } finally {
       setSaving(false)
     }
@@ -119,58 +121,58 @@ export function EventCosts() {
   const handleDelete = async (id: string) => {
     try {
       await deleteCost(id)
-      toast.success("Cost removed")
+      toast.success(t("Cost removed"))
       fetch()
     } catch {
-      toast.error("Failed to remove cost")
+      toast.error(t("Failed to remove cost"))
     }
   }
 
   const handleExport = () => {
     const data = [...planned, ...actual].map((c) => ({
-      Type: c.costType,
-      Item: c.item,
-      "Need Type": c.needType,
-      Quantity: c.quantity,
-      "Unit Price": c.unitPrice,
-      Cost: costLineTotal(c),
-      Notes: c.notes ?? "",
+      [t("Type")]: c.costType,
+      [t("Item")]: c.item,
+      [t("Need Type")]: c.needType,
+      [t("Quantity")]: c.quantity,
+      [t("Unit Price")]: c.unitPrice,
+      [t("Cost")]: costLineTotal(c),
+      [t("Notes")]: c.notes ?? "",
     }))
     exportToCsv(data, `${eventTitle}-costs.csv`)
   }
 
-  if (loading) return <Loading text="Loading costs..." />
+  if (loading) return <Loading text={t("Loading costs...")} />
 
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard/events")} className="gap-2">
-        <ArrowLeft size={16} /> Back to Events
+        <ArrowLeft size={16} /> {t("Back to Events")}
       </Button>
 
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Costs: {eventTitle}</h1>
+        <h1 className="text-2xl font-bold">{t("Costs:")} {eventTitle}</h1>
         <Button variant="outline" size="sm" className="gap-2" onClick={handleExport}>
-          <Download size={15} /> Export CSV
+          <Download size={15} /> {t("Export CSV")}
         </Button>
       </div>
 
       <div className="grid sm:grid-cols-3 gap-4">
         <SummaryCard
           icon={Wallet}
-          label="Planned Total"
-          value={plannedTotal.toLocaleString()}
+          label={t("Planned Total")}
+          value={formatNumber(plannedTotal)}
           color="bg-blue-500/10 text-blue-600 dark:text-blue-400"
         />
         <SummaryCard
           icon={Wallet}
-          label="Actual Total"
-          value={actualTotal.toLocaleString()}
+          label={t("Actual Total")}
+          value={formatNumber(actualTotal)}
           color="bg-amber-500/10 text-amber-600 dark:text-amber-400"
         />
         <SummaryCard
           icon={difference >= 0 ? TrendingDown : TrendingUp}
-          label="Difference (Planned - Actual)"
-          value={`${difference >= 0 ? "+" : ""}${difference.toLocaleString()}`}
+          label={t("Difference (Planned - Actual)")}
+          value={`${difference >= 0 ? "+" : ""}${formatNumber(difference)}`}
           color={difference >= 0 ? "bg-green-500/10 text-green-600 dark:text-green-400" : "bg-red-500/10 text-red-600 dark:text-red-400"}
         />
       </div>
@@ -191,25 +193,25 @@ export function EventCosts() {
 
       <div className="rounded-lg border border-border">
         <div className="flex items-center justify-between px-4 py-3 border-b border-border bg-muted/20">
-          <p className="font-semibold capitalize">{costType} costs</p>
+          <p className="font-semibold capitalize">{costType} {t("costs")}</p>
           <Button size="sm" className="gap-1.5" onClick={() => setEditor({ ...emptyEditor })}>
-            <Plus size={15} /> Add {costType} cost
+            <Plus size={15} /> {t("Add")} {costType} {t("cost")}
           </Button>
         </div>
 
         {rows.length === 0 ? (
-          <EmptyState title="No costs yet" description={`Add your ${costType} expenses to track the event budget.`} />
+          <EmptyState title={t("No costs yet")} description={t("Add your {type} expenses to track the event budget.", { type: costType })} />
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Item</TableHead>
-                <TableHead>Need Type</TableHead>
-                <TableHead>Qty</TableHead>
-                <TableHead>Unit Price</TableHead>
-                <TableHead>Cost</TableHead>
-                <TableHead>Modified By</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("Item")}</TableHead>
+                <TableHead>{t("Need Type")}</TableHead>
+                <TableHead>{t("Qty")}</TableHead>
+                <TableHead>{t("Unit Price")}</TableHead>
+                <TableHead>{t("Cost")}</TableHead>
+                <TableHead>{t("Modified By")}</TableHead>
+                <TableHead className="text-right">{t("Actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -219,7 +221,7 @@ export function EventCosts() {
                   <TableCell><Badge variant="outline" className="capitalize">{c.needType}</Badge></TableCell>
                   <TableCell>{c.quantity}</TableCell>
                   <TableCell>{c.unitPrice}</TableCell>
-                  <TableCell className="font-semibold">{costLineTotal(c).toLocaleString()}</TableCell>
+                  <TableCell className="font-semibold">{formatNumber(costLineTotal(c))}</TableCell>
                   <TableCell className="text-sm text-muted-foreground">
                     {nameMap[c.updatedBy ?? c.createdBy] ?? "—"}
                   </TableCell>
@@ -243,8 +245,8 @@ export function EventCosts() {
                 </TableRow>
               ))}
               <TableRow className="bg-muted/30">
-                <TableCell className="font-bold" colSpan={4}>Total</TableCell>
-                <TableCell className="font-bold">{total.toLocaleString()}</TableCell>
+                <TableCell className="font-bold" colSpan={4}>{t("Total")}</TableCell>
+                <TableCell className="font-bold">{formatNumber(total)}</TableCell>
                 <TableCell colSpan={2} />
               </TableRow>
             </TableBody>
@@ -255,13 +257,13 @@ export function EventCosts() {
       {editor && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setEditor(null)}>
           <div className="w-full max-w-lg rounded-xl bg-card p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold">{editor.id ? "Edit cost" : `Add ${costType} cost`}</h2>
+            <h2 className="text-lg font-semibold">{editor.id ? t("Edit cost") : `Add ${costType} cost`}</h2>
             <div>
-              <label className="block text-sm font-medium mb-1">Item</label>
-              <Input value={editor.item} onChange={(e) => setEditor({ ...editor, item: e.target.value })} placeholder="e.g. Catering service" />
+              <label className="block text-sm font-medium mb-1">{t("Item")}</label>
+              <Input value={editor.item} onChange={(e) => setEditor({ ...editor, item: e.target.value })} placeholder={t("e.g. Catering service")} />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Need Type</label>
+              <label className="block text-sm font-medium mb-1">{t("Need Type")}</label>
               <select value={editor.needType} onChange={(e) => setEditor({ ...editor, needType: e.target.value })}
                 className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm">
                 {COST_NEED_TYPES.map((t) => <option key={t} value={t}>{t}</option>)}
@@ -269,22 +271,22 @@ export function EventCosts() {
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div>
-                <label className="block text-sm font-medium mb-1">Quantity</label>
+                <label className="block text-sm font-medium mb-1">{t("Quantity")}</label>
                 <Input type="number" min={0} value={editor.quantity} onChange={(e) => setEditor({ ...editor, quantity: e.target.value })} />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Unit Price</label>
+                <label className="block text-sm font-medium mb-1">{t("Unit Price")}</label>
                 <Input type="number" min={0} value={editor.unitPrice} onChange={(e) => setEditor({ ...editor, unitPrice: e.target.value })} />
               </div>
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Notes</label>
+              <label className="block text-sm font-medium mb-1">{t("Notes")}</label>
               <textarea value={editor.notes} onChange={(e) => setEditor({ ...editor, notes: e.target.value })}
                 rows={2} className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring" />
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setEditor(null)}>Cancel</Button>
-              <Button onClick={handleSave} disabled={saving}>{saving ? "Saving..." : "Save"}</Button>
+              <Button variant="outline" onClick={() => setEditor(null)}>{t("Cancel")}</Button>
+              <Button onClick={handleSave} disabled={saving}>{saving ? t("Saving...") : t("Save")}</Button>
             </div>
           </div>
         </div>

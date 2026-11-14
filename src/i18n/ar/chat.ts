@@ -1,0 +1,15 @@
+export const chat: Record<string, string> = {
+  "Event chat": "محادثة الفعالية",
+  "Type your message...": "اكتب رسالتك...",
+  "Send": "إرسال",
+  "Sending": "جارٍ الإرسال",
+  "No messages yet": "لا توجد رسائل بعد",
+  "Start the conversation": "ابدأ المحادثة",
+  "Ask about events": "اسأل عن الفعاليات",
+  "Support assistant": "مساعد الدعم",
+  "Close chat": "إغلاق المحادثة",
+  "Open chat": "فتح المحادثة",
+  "Message sent": "تم إرسال الرسالة",
+  "Failed to send message": "فشل إرسال الرسالة",
+  "Online now": "متصل الآن",
+}

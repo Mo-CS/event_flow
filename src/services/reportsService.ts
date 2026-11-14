@@ -1,23 +1,26 @@
+import { formatDateTime } from "../i18n/format"
 import { supabase } from "../lib/supabase"
 
-export async function getReportData() {
+export type ReportModeFilter = "all" | "online" | "in_person"
+
+export async function getReportData(modeFilter: ReportModeFilter = "all") {
   const [events, registrations, categories, feedbacks, users, profiles, venues, tickets, attendance, costs, evaluations] =
     await Promise.all([
-      supabase.from("events").select("id, title, status, capacity, category_id, venue_id, event_type, start_date, end_date").order("start_date"),
-      supabase.from("registrations").select("id, event_id, attendee_id, status, registered_at"),
+      supabase.from("events").select("id, title, status, capacity, online_capacity, in_person_capacity, category_id, venue_id, event_type, start_date, end_date").order("start_date"),
+      supabase.from("registrations").select("id, event_id, attendee_id, status, attendance_mode, registered_at"),
       supabase.from("categories").select("id, name"),
       supabase.from("feedback").select("id, event_id, rating, submitted_at"),
       supabase.from("users").select("id, email, suspended, created_at"),
       supabase.from("profiles").select("id, user_id, first_name, last_name, role_id, role:roles(name)"),
       supabase.from("venues").select("id, name"),
       supabase.from("tickets").select("id, registration_id, status"),
-      supabase.from("attendance").select("id, ticket_id, check_in_time"),
+      supabase.from("attendance").select("id, ticket_id, check_in_time, mode"),
       supabase.from("event_costs").select("event_id, cost_type, need_type, quantity, unit_price"),
       supabase.from("evaluations").select("id, event_id, rating_type"),
     ])
 
   const evs = (events.data ?? []) as any[]
-  const regs = (registrations.data ?? []) as any[]
+  const allRegs = (registrations.data ?? []) as any[]
   const cats = (categories.data ?? []) as any[]
   const fbs = (feedbacks.data ?? []) as any[]
   const usrs = (users.data ?? []) as any[]
@@ -28,6 +31,17 @@ export async function getReportData() {
   const csts = (costs.data ?? []) as any[]
   const evals = (evaluations.data ?? []) as any[]
 
+  // Resolve each registration to an attendance mode. Hybrid events carry the
+  // mode on the registration; legacy online/in-person events fall back to the
+  // event type.
+  const eventById = new Map(evs.map((e) => [e.id, e]))
+  const regMode = (r: any): "online" | "in_person" => {
+    if (r.attendance_mode === "online") return "online"
+    if (r.attendance_mode === "in_person") return "in_person"
+    return eventById.get(r.event_id)?.event_type === "online" ? "online" : "in_person"
+  }
+  const regs = modeFilter === "all" ? allRegs : allRegs.filter((r) => regMode(r) === modeFilter)
+
   // ---------- Overview ----------
   const totalEvents = evs.length
   const totalUsers = usrs.length
@@ -35,7 +49,9 @@ export async function getReportData() {
   const confirmedRegs = regs.filter((r) => r.status === "confirmed").length
   const cancelledRegs = regs.filter((r) => r.status === "cancelled").length
   const waitlistedRegs = regs.filter((r) => r.status === "waitlisted").length
-  const totalAttendance = atts.length
+  const totalAttendance = modeFilter === "all"
+    ? atts.length
+    : atts.filter((a) => a.mode === modeFilter || (!a.mode && modeFilter === "in_person")).length
   const averageRating = fbs.length > 0
     ? +(fbs.reduce((s, f) => s + f.rating, 0) / fbs.length).toFixed(1)
     : 0
@@ -124,6 +140,8 @@ export async function getReportData() {
       confirmed: eventAll.filter((r) => r.status === "confirmed").length,
       cancelled: eventAll.filter((r) => r.status === "cancelled").length,
       waitlisted: eventAll.filter((r) => r.status === "waitlisted").length,
+      online: eventRegs.filter((r) => regMode(r) === "online").length,
+      inPerson: eventRegs.filter((r) => regMode(r) === "in_person").length,
       attended,
       rate: eventRegs.length > 0 ? Math.round((attended / eventRegs.length) * 100) : 0,
       fillRate: e.capacity > 0 ? Math.round((eventRegs.length / e.capacity) * 100) : 0,
@@ -136,12 +154,21 @@ export async function getReportData() {
   }))
 
   // ---------- Attendance section ----------
-  const onlineEvents = evs.filter((e) => e.event_type === "online")
-  const inPersonEvents = evs.filter((e) => e.event_type === "in_person")
-  const attendanceByType = [
-    { name: "In-Person", value: countAttendanceForEvents(inPersonEvents, regs, tks, atts) },
-    { name: "Online", value: countAttendanceForEvents(onlineEvents, regs, tks, atts) },
-  ]
+  // Count by the attendee's chosen mode so hybrid events are split correctly.
+  const attendanceByMode = (["in_person", "online"] as const).map((mode) => {
+    const modeRegs = allRegs.filter((r) => r.status !== "cancelled" && regMode(r) === mode)
+    const attended = modeRegs.filter((r) => {
+      const ticket = tks.find((t) => t.registration_id === r.id)
+      return ticket ? atts.some((a) => a.ticket_id === ticket.id) : false
+    }).length
+    return {
+      mode,
+      name: mode === "online" ? "Online" : "In-Person",
+      confirmed: modeRegs.length,
+      attended,
+    }
+  })
+  const attendanceByType = attendanceByMode.map((m) => ({ name: m.name, value: m.attended }))
 
   // ---------- Feedback / evaluation ----------
   const ratingDistMap: Record<string, number> = {}
@@ -220,7 +247,7 @@ export async function getReportData() {
     .sort(([a], [b]) => a.localeCompare(b))
     .map(([key, count]) => {
       const [year, month] = key.split("-")
-      const label = new Date(Number(year), Number(month) - 1, 1).toLocaleString("en-US", { month: "short", year: "numeric" })
+      const label = formatDateTime(new Date(Number(year), Number(month) - 1, 1), { month: "short", year: "numeric" })
       return { key, month: label, count }
     })
 
@@ -231,6 +258,7 @@ export async function getReportData() {
   ].filter((d) => d.value > 0)
 
   return {
+    modeFilter,
     summary: {
       totalEvents, totalUsers, totalRegs, confirmedRegs, cancelledRegs, waitlistedRegs,
       totalAttendance, averageRating,
@@ -248,6 +276,7 @@ export async function getReportData() {
     topAttendees,
     attendanceRateByEvent,
     attendanceByType,
+    attendanceByMode,
     ratingDistribution,
     avgRatingByEvent,
     costsByEvent,
@@ -257,22 +286,6 @@ export async function getReportData() {
     categories: cats,
     evaluations: evals,
   }
-}
-
-function countAttendanceForEvents(
-  eventList: any[],
-  regs: any[],
-  tks: any[],
-  atts: any[],
-): number {
-  let count = 0
-  const eventIds = new Set(eventList.map((e) => e.id))
-  const eventRegs = regs.filter((r) => eventIds.has(r.event_id))
-  for (const t of tks) {
-    const reg = eventRegs.find((r) => r.id === t.registration_id)
-    if (reg && atts.some((a) => a.ticket_id === t.id)) count++
-  }
-  return count
 }
 
 export function exportToCsv(data: Record<string, any>[], filename: string) {

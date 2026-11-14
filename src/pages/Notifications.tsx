@@ -1,6 +1,8 @@
+import { formatDateTime } from "../i18n/format"
+import { t } from "../i18n"
 import { useState, useEffect, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
-import { Bell, Mail, MailOpen, Trash2, Send, CheckCheck, ExternalLink } from "lucide-react"
+import { Bell, Mail, MailOpen, Trash2, CheckCheck, ExternalLink } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
@@ -9,7 +11,7 @@ import { EmptyState } from "../components/ui/EmptyState"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs"
 import { useAuth } from "../contexts/AuthContext"
 import {
-  getNotifications, markAsRead, markAllAsRead, deleteNotification, sendEventReminder,
+  getNotifications, markAsRead, markAllAsRead, deleteNotification,
 } from "../services/notificationService"
 import type { Notification } from "../types"
 
@@ -25,7 +27,6 @@ export function Notifications() {
   const navigate = useNavigate()
   const [notifs, setNotifs] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
-  const [sending, setSending] = useState(false)
 
   const fetch = useCallback(async () => {
     if (!profile) return
@@ -34,7 +35,7 @@ export function Notifications() {
       const data = await getNotifications(profile.userId)
       setNotifs(data)
     } catch {
-      toast.error("Could not load notifications")
+      toast.error(t("Could not load notifications"))
     } finally {
       setLoading(false)
     }
@@ -59,7 +60,7 @@ export function Notifications() {
     if (!profile) return
     await markAllAsRead(profile.userId)
     setNotifs((prev) => prev.map((n) => (n.readAt ? n : { ...n, readAt: new Date().toISOString() })))
-    toast.success("All marked as read")
+    toast.success(t("All marked as read"))
   }
 
   const handleDelete = async (id: string) => {
@@ -67,47 +68,31 @@ export function Notifications() {
     setNotifs((prev) => prev.filter((n) => n.id !== id))
   }
 
-  const handleSendReminder = async () => {
-    if (!profile) return
-    setSending(true)
-    try {
-      const count = await sendEventReminder("event-1")
-      toast.success(`Sent ${count} reminders`)
-      fetch()
-    } catch (e: any) {
-      toast.error(e.message)
-    }
-    setSending(false)
-  }
-
   const unread = notifs.filter((n) => !n.readAt)
   const read = notifs.filter((n) => n.readAt)
 
-  if (loading) return <Loading text="Loading notifications..." />
+  if (loading) return <Loading text={t("Loading notifications...")} />
 
   return (
     <div className="relative space-y-6 animate-fade-in-up">
       <div className="absolute -top-10 -right-10 w-64 h-64 bg-teal-500/8 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-10 -left-10 w-56 h-56 bg-amber-500/6 rounded-full blur-3xl pointer-events-none" />
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Notifications</h1>
+        <h1 className="text-2xl font-bold">{t("Notifications")}</h1>
         <div className="flex gap-2">
           {unread.length > 0 && (
             <Button size="sm" variant="ghost" onClick={handleMarkAllRead} className="gap-2">
-              <CheckCheck size={14} /> Mark All Read
+              <CheckCheck size={14} /> {t("Mark All Read")}
             </Button>
           )}
-          <Button size="sm" variant="ghost" onClick={handleSendReminder} disabled={sending} className="gap-2">
-            <Send size={14} /> {sending ? "Sending..." : "Send Test Reminder"}
-          </Button>
         </div>
       </div>
 
       <Tabs defaultValue="all">
         <TabsList>
-          <TabsTrigger value="all">All ({notifs.length})</TabsTrigger>
-          <TabsTrigger value="unread">Unread ({unread.length})</TabsTrigger>
-          <TabsTrigger value="read">Read ({read.length})</TabsTrigger>
+          <TabsTrigger value="all">{t("All (")}{notifs.length})</TabsTrigger>
+          <TabsTrigger value="unread">{t("Unread (")}{unread.length})</TabsTrigger>
+          <TabsTrigger value="read">{t("Read (")}{read.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="all" className="mt-4">
@@ -130,7 +115,7 @@ function renderList(
   onDelete: (id: string) => void,
   onOpen: (n: Notification) => void,
 ) {
-  if (items.length === 0) return <EmptyState title="No notifications" description="You're all caught up!" icon={<Bell />} />
+  if (items.length === 0) return <EmptyState title={t("No notifications")} description={t("You're all caught up!")} icon={<Bell />} />
 
   return (
     <div className="space-y-2">
@@ -150,20 +135,20 @@ function renderList(
               <p className={`text-sm ${!n.readAt ? "font-medium" : ""}`}>{n.message}</p>
               <Badge variant={typeColors[n.type] ?? "outline"} className="text-[10px] px-1.5 capitalize">{n.type.replace(/_/g, " ")}</Badge>
             </div>
-            <p className="text-xs text-muted-foreground mt-1">{new Date(n.createdAt).toLocaleString()}</p>
+            <p className="text-xs text-muted-foreground mt-1">{formatDateTime(new Date(n.createdAt))}</p>
           </div>
           <div className="flex gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
             {n.link && (
-              <Button size="icon" variant="ghost" className="h-8 w-8" title="Open" onClick={() => onOpen(n)}>
+              <Button size="icon" variant="ghost" className="h-8 w-8" title={t("Open")} onClick={() => onOpen(n)}>
                 <ExternalLink size={14} />
               </Button>
             )}
             {!n.readAt && (
-              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onMarkRead(n.id)} title="Mark as read">
+              <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => onMarkRead(n.id)} title={t("Mark as read")}>
                 <CheckCheck size={14} />
               </Button>
             )}
-            <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => onDelete(n.id)} title="Delete">
+            <Button size="icon" variant="ghost" className="h-8 w-8 text-destructive" onClick={() => onDelete(n.id)} title={t("Delete")}>
               <Trash2 size={14} />
             </Button>
           </div>

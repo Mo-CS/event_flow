@@ -1,3 +1,5 @@
+import { formatDate, formatDateTime } from "../i18n/format"
+import { t } from "../i18n"
 import { useState, useEffect } from "react"
 import { Shield, AlertTriangle, UserCheck } from "lucide-react"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table"
@@ -60,18 +62,18 @@ export function SecurityCenter() {
 
   const suspendedUsers = allUsers.filter((u: any) => u.suspended)
 
-  if (loading) return <Loading text="Loading security data..." />
+  if (loading) return <Loading text={t("Loading security data...")} />
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Security Center</h1>
+      <h1 className="text-2xl font-bold">{t("Security Center")}</h1>
 
       <div className="grid sm:grid-cols-3 gap-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 rounded-lg bg-blue-500/10"><Shield size={20} className="text-blue-500" /></div>
             <div>
-              <p className="text-xs text-muted-foreground">Total Audit Events</p>
+              <p className="text-xs text-muted-foreground">{t("Total Audit Events")}</p>
               <p className="text-xl font-bold">{logs.length}</p>
             </div>
           </CardContent>
@@ -80,7 +82,7 @@ export function SecurityCenter() {
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 rounded-lg bg-red-500/10"><AlertTriangle size={20} className="text-red-500" /></div>
             <div>
-              <p className="text-xs text-muted-foreground">Suspended Users</p>
+              <p className="text-xs text-muted-foreground">{t("Suspended Users")}</p>
               <p className="text-xl font-bold">{suspendedUsers.length}</p>
             </div>
           </CardContent>
@@ -89,7 +91,7 @@ export function SecurityCenter() {
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 rounded-lg bg-green-500/10"><UserCheck size={20} className="text-green-500" /></div>
             <div>
-              <p className="text-xs text-muted-foreground">Active Users</p>
+              <p className="text-xs text-muted-foreground">{t("Active Users")}</p>
               <p className="text-xl font-bold">{allUsers.length - suspendedUsers.length}</p>
             </div>
           </CardContent>
@@ -98,23 +100,23 @@ export function SecurityCenter() {
 
       <Tabs defaultValue="audit">
         <TabsList>
-          <TabsTrigger value="audit">Audit Log</TabsTrigger>
-          <TabsTrigger value="suspended">Suspended Users ({suspendedUsers.length})</TabsTrigger>
+          <TabsTrigger value="audit">{t("Audit Log")}</TabsTrigger>
+          <TabsTrigger value="suspended">{t("Suspended Users (")}{suspendedUsers.length})</TabsTrigger>
         </TabsList>
 
         <TabsContent value="audit" className="mt-4">
           {logs.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No audit logs.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">{t("No audit logs.")}</p>
           ) : (
             <div className="rounded-lg border border-border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>User</TableHead>
-                    <TableHead>Action</TableHead>
-                    <TableHead>Details</TableHead>
-                    <TableHead>IP Address</TableHead>
-                    <TableHead>Date</TableHead>
+                    <TableHead>{t("User")}</TableHead>
+                    <TableHead>{t("Action")}</TableHead>
+                    <TableHead>{t("Details")}</TableHead>
+                    <TableHead>{t("IP Address")}</TableHead>
+                    <TableHead>{t("Date")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -126,9 +128,9 @@ export function SecurityCenter() {
                         <TableCell>
                           <Badge variant={actionColors[log.action] ?? "outline"} className="capitalize">{log.action}</Badge>
                         </TableCell>
-                        <TableCell className="text-sm">{log.details}</TableCell>
+                        <TableCell className="text-sm">{t(log.details)}</TableCell>
                         <TableCell className="text-sm text-muted-foreground font-mono">{log.ipAddress}</TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{new Date(log.createdAt).toLocaleString()}</TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{formatDateTime(new Date(log.createdAt))}</TableCell>
                       </TableRow>
                     )
                   })}
@@ -140,15 +142,15 @@ export function SecurityCenter() {
 
         <TabsContent value="suspended" className="mt-4">
           {suspendedUsers.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-8">No suspended users.</p>
+            <p className="text-sm text-muted-foreground text-center py-8">{t("No suspended users.")}</p>
           ) : (
             <div className="rounded-lg border border-border">
               <Table>
                 <TableHeader>
                   <TableRow>
-                    <TableHead>Email</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Created</TableHead>
+                    <TableHead>{t("Email")}</TableHead>
+                    <TableHead>{t("Status")}</TableHead>
+                    <TableHead>{t("Created")}</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
@@ -160,8 +162,8 @@ export function SecurityCenter() {
                           <p className="font-medium">{u.email}</p>
                           <p className="text-xs text-muted-foreground">{p?.first_name} {p?.last_name}</p>
                         </TableCell>
-                        <TableCell><Badge variant="destructive">Suspended</Badge></TableCell>
-                        <TableCell className="text-sm text-muted-foreground">{new Date(u.created_at).toLocaleDateString()}</TableCell>
+                        <TableCell><Badge variant="destructive">{t("Suspended")}</Badge></TableCell>
+                        <TableCell className="text-sm text-muted-foreground">{formatDate(new Date(u.created_at))}</TableCell>
                       </TableRow>
                     )
                   })}

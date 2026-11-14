@@ -1,3 +1,4 @@
+import { t } from "../i18n"
 import { useEffect, useRef, useState } from "react"
 import { Html5Qrcode } from "html5-qrcode"
 import { Input } from "./ui/input"
@@ -35,7 +36,7 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
       },
       () => {},
     ).catch((e) => {
-      setError(e?.toString() ?? "Camera unavailable")
+      setError(e?.toString() ?? t("Camera unavailable"))
     })
     return () => { safeStop() }
   }, [])
@@ -50,16 +51,16 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
       <div className="bg-card rounded-xl p-4 shadow-xl w-full max-w-sm mx-4" onClick={(e) => e.stopPropagation()}>
         {error ? (
           <div className="w-full aspect-square rounded-lg overflow-hidden bg-muted flex flex-col items-center justify-center p-4 text-center text-sm text-muted-foreground gap-3">
-            <p>Camera not available</p>
+            <p>{t("Camera not available")}</p>
             <div className="w-full max-w-xs space-y-2">
               <Input
-                placeholder="Enter ticket code manually..."
+                placeholder={t("Enter ticket code manually...")}
                 value={manualCode}
                 onChange={(e) => setManualCode(e.target.value)}
                 onKeyDown={(e) => e.key === "Enter" && handleManualSubmit()}
               />
               <Button size="sm" className="w-full" onClick={handleManualSubmit} disabled={!manualCode.trim()}>
-                Submit
+                {t("Submit")}
               </Button>
             </div>
           </div>
@@ -67,14 +68,14 @@ export function QrScanner({ onScan, onClose }: QrScannerProps) {
           <div id={SCANNER_ID} className="w-full aspect-square rounded-lg overflow-hidden bg-muted" />
         )}
         <p className="text-sm text-muted-foreground text-center mt-3">
-          {error ? "Enter the ticket code manually above" : "Point camera at the ticket QR code"}
+          {error ? t("Enter the ticket code manually above") : t("Point camera at the ticket QR code")}
         </p>
         {error && (
           <p className="text-xs text-muted-foreground text-center mt-1">
-            Camera requires HTTPS — use Chrome with HTTPS or enter code manually
+            {t("Camera requires HTTPS — use Chrome with HTTPS or enter code manually")}
           </p>
         )}
-        <button onClick={onClose} className="mt-3 w-full py-2 text-sm font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors">Cancel</button>
+        <button onClick={onClose} className="mt-3 w-full py-2 text-sm font-medium text-destructive hover:bg-destructive/10 rounded-lg transition-colors">{t("Cancel")}</button>
       </div>
     </div>
   )

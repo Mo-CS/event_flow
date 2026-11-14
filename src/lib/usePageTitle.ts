@@ -1,4 +1,6 @@
+import { t } from "../i18n"
 import { useEffect } from "react"
+import { useSettings } from "../contexts/SettingsContext"
 
 const TITLES: Array<[prefix: string, title: string]> = [
   ["/dashboard/admin/users", "User Management"],
@@ -24,8 +26,9 @@ const TITLES: Array<[prefix: string, title: string]> = [
 ]
 
 export function usePageTitle(pathname: string): void {
+  const { appName } = useSettings()
   useEffect(() => {
     const match = TITLES.find(([prefix]) => pathname === prefix || pathname.startsWith(prefix + "/"))
-    document.title = match ? `${match[1]} — EventFlow` : "EventFlow"
-  }, [pathname])
+    document.title = match ? `${t(match[1])} — ${appName}` : appName
+  }, [pathname, appName])
 }

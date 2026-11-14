@@ -1,3 +1,4 @@
+import { t } from "../i18n"
 import { useState, useEffect, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { ArrowLeft, Plus, Trash2, ShieldCheck, Loader2 } from "lucide-react"
@@ -37,7 +38,7 @@ export function EventOrganizers() {
       setAssigned(a)
       setAllOrganizers(all)
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to load")
+      toast.error(e?.message ?? t("Failed to load"))
     } finally {
       setLoading(false)
     }
@@ -52,10 +53,10 @@ export function EventOrganizers() {
     setBusy(true)
     try {
       await assignOrganizer(eventId, userId, profile.userId)
-      toast.success("Organizer added")
+      toast.success(t("Organizer added"))
       fetch()
     } catch {
-      toast.error("Failed to add organizer")
+      toast.error(t("Failed to add organizer"))
     } finally {
       setBusy(false)
     }
@@ -66,46 +67,46 @@ export function EventOrganizers() {
     setBusy(true)
     try {
       await removeOrganizer(eventId, userId)
-      toast.success("Organizer removed — chats stay archived")
+      toast.success(t("Organizer removed — chats stay archived"))
       fetch()
     } catch {
-      toast.error("Failed to remove organizer")
+      toast.error(t("Failed to remove organizer"))
     } finally {
       setBusy(false)
     }
   }
 
-  if (loading) return <Loading text="Loading organizers..." />
+  if (loading) return <Loading text={t("Loading organizers...")} />
 
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard/events")} className="gap-2">
-        <ArrowLeft size={16} /> Back to Events
+        <ArrowLeft size={16} /> {t("Back to Events")}
       </Button>
 
       <div className="flex items-center justify-between">
         <h1 className="text-2xl font-bold flex items-center gap-2">
-          <ShieldCheck size={22} className="text-primary" /> Organizers: {eventTitle}
+          <ShieldCheck size={22} className="text-primary" /> {t("Organizers:")} {eventTitle}
         </h1>
-        <Badge variant="secondary">{assigned.length} assigned</Badge>
+        <Badge variant="secondary">{assigned.length} {t("assigned")}</Badge>
       </div>
 
       <p className="text-sm text-muted-foreground">
-        Assign organizer accounts to help manage this event. Only admins can change organizer assignments. Removed organizers keep access to archived conversations.
+        {t("Assign organizer accounts to help manage this event. Only admins can change organizer assignments. Removed organizers keep access to archived conversations.")}
       </p>
 
       <div className="rounded-lg border border-border">
-        <div className="px-4 py-3 border-b border-border bg-muted/20 font-semibold">Assigned Organizers</div>
+        <div className="px-4 py-3 border-b border-border bg-muted/20 font-semibold">{t("Assigned Organizers")}</div>
         {assigned.length === 0 ? (
-          <EmptyState title="No organizers assigned" description="Add organizers below." />
+          <EmptyState title={t("No organizers assigned")} description={t("Add organizers below.")} />
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("Name")}</TableHead>
+                <TableHead>{t("Email")}</TableHead>
+                <TableHead>{t("Role")}</TableHead>
+                <TableHead className="text-right">{t("Actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -113,18 +114,18 @@ export function EventOrganizers() {
                 <TableRow key={o.userId}>
                   <TableCell className="font-medium">
                     {o.firstName} {o.lastName}
-                    {o.isPrimary && <Badge variant="secondary" className="ml-2">Primary</Badge>}
+                    {o.isPrimary && <Badge variant="secondary" className="ml-2">{t("Primary")}</Badge>}
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">{o.email}</TableCell>
                   <TableCell>
                     {o.managesAllEvents
-                      ? <Badge variant="outline" className="text-teal-600">All events</Badge>
-                      : <Badge variant="secondary">Event only</Badge>}
+                      ? <Badge variant="outline" className="text-teal-600">{t("All events")}</Badge>
+                      : <Badge variant="secondary">{t("Event only")}</Badge>}
                   </TableCell>
                   <TableCell className="text-right">
                     {!o.isPrimary && (
                       <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleRemove(o.userId)} disabled={busy}>
-                        <Trash2 size={14} /> Remove
+                        <Trash2 size={14} /> {t("Remove")}
                       </Button>
                     )}
                   </TableCell>
@@ -136,17 +137,17 @@ export function EventOrganizers() {
       </div>
 
       <div className="rounded-lg border border-border">
-        <div className="px-4 py-3 border-b border-border bg-muted/20 font-semibold">Available Organizers</div>
+        <div className="px-4 py-3 border-b border-border bg-muted/20 font-semibold">{t("Available Organizers")}</div>
         {allOrganizers.filter((o) => !assigneeIds.has(o.userId)).length === 0 ? (
-          <EmptyState title="No more organizers available" description="Create more organizer accounts or adjust assignments." />
+          <EmptyState title={t("No more organizers available")} description={t("Create more organizer accounts or adjust assignments.")} />
         ) : (
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Scope</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("Name")}</TableHead>
+                <TableHead>{t("Email")}</TableHead>
+                <TableHead>{t("Scope")}</TableHead>
+                <TableHead className="text-right">{t("Actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -156,12 +157,12 @@ export function EventOrganizers() {
                   <TableCell className="text-sm text-muted-foreground">{o.email}</TableCell>
                   <TableCell>
                     {o.managesAllEvents
-                      ? <Badge variant="outline" className="text-teal-600">All events</Badge>
-                      : <Badge variant="secondary">Event only</Badge>}
+                      ? <Badge variant="outline" className="text-teal-600">{t("All events")}</Badge>
+                      : <Badge variant="secondary">{t("Event only")}</Badge>}
                   </TableCell>
                   <TableCell className="text-right">
                     <Button size="sm" variant="outline" className="gap-1.5" onClick={() => handleAssign(o.userId)} disabled={busy}>
-                      {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} Assign
+                      {busy ? <Loader2 size={14} className="animate-spin" /> : <Plus size={14} />} {t("Assign")}
                     </Button>
                   </TableCell>
                 </TableRow>

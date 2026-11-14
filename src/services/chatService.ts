@@ -1,3 +1,4 @@
+import { t } from "../i18n"
 import { supabase } from "../lib/supabase"
 import type { ChatChannel, ChatMessage, ChatMessageWithSender } from "../types"
 
@@ -92,6 +93,40 @@ export async function ensurePrivateChannel(
 }
 
 /**
+ * User ids of the event's primary organizer plus any assigned co-organizers.
+ * `events.organizer_id` references `profiles.id`, whereas `event_organizers`
+ * and `chat_channels` use `users.id`, so the primary organizer is resolved.
+ */
+async function getOrganizerUserIdsForEvent(eventId: string): Promise<string[]> {
+  const ids = new Set<string>()
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("organizer_id")
+    .eq("id", eventId)
+    .single()
+
+  if (event?.organizer_id) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("user_id")
+      .eq("id", event.organizer_id)
+      .maybeSingle()
+    if (profile?.user_id) ids.add(profile.user_id)
+  }
+
+  const { data: orgs } = await supabase
+    .from("event_organizers")
+    .select("user_id")
+    .eq("event_id", eventId)
+  for (const org of orgs ?? []) {
+    if (org.user_id) ids.add(org.user_id)
+  }
+
+  return [...ids]
+}
+
+/**
  * Channels accessible to a user for an event, enriched with titles.
  */
 export async function getChannelsForUser(eventId: string, userId: string, attendeeProfileId?: string): Promise<ChatChannelInfo[]> {
@@ -109,7 +144,7 @@ export async function getChannelsForUser(eventId: string, userId: string, attend
   const { data: event } = await supabase.from("events").select("title").eq("id", eventId).single()
   result.push({
     ...general,
-    title: "Community",
+    title: t("Community"),
     subtitle: `General chat for "${event?.title ?? "event"}"`,
   })
 
@@ -133,20 +168,7 @@ export async function getChannelsForUser(eventId: string, userId: string, attend
       })
     }
   } else if (attendeeProfileId) {
-    const { data: orgRows } = await supabase
-      .from("event_organizers")
-      .select("user_id")
-      .eq("event_id", eventId)
-    const { data: eventRow } = await supabase
-      .from("events")
-      .select("organizer_id")
-      .eq("id", eventId)
-      .single()
-
-    const organizerIds = new Set<string>([
-      eventRow?.organizer_id,
-      ...(orgRows ?? []).map((o) => o.user_id),
-    ].filter(Boolean))
+    const organizerIds = await getOrganizerUserIdsForEvent(eventId)
 
     for (const orgId of organizerIds) {
       const channel = await ensurePrivateChannel(eventId, orgId, attendeeProfileId)
@@ -154,7 +176,7 @@ export async function getChannelsForUser(eventId: string, userId: string, attend
       result.push({
         ...channel,
         title: `Private · ${orgName}`,
-        subtitle: "1:1 conversation with the organizer",
+        subtitle: t("1:1 conversation with the organizer"),
       })
     }
   }
@@ -192,7 +214,7 @@ export async function getMessages(
   limit = 100,
 ): Promise<ChatMessageWithSender[]> {
   const channel = await getChannelById(channelId)
-  if (!channel) throw new Error("Channel not found")
+  if (!channel) throw new Error(t("Channel not found"))
 
   // Private 1:1 channels are only readable by the two parties (NF3).
   if (channel.channelType === "private") {
@@ -205,7 +227,7 @@ export async function getMessages(
     const isOrganizer = requester?.userId === channel.organizerId
     const isAttendee = requester?.userId === attendeeUserId
     if (!isOrganizer && !isAttendee) {
-      throw new Error("You do not have access to this channel")
+      throw new Error(t("You do not have access to this channel"))
     }
   }
 
@@ -272,19 +294,7 @@ export async function getChannelMemberUserIds(channel: ChatChannel): Promise<str
     for (const p of profs ?? []) attendeeUserIds.push(p.user_id)
   }
 
-  const organizerUserIds: string[] = []
-  const { data: event } = await supabase
-    .from("events")
-    .select("organizer_id")
-    .eq("id", channel.eventId)
-    .single()
-  if (event?.organizer_id) organizerUserIds.push(event.organizer_id)
-
-  const { data: orgs } = await supabase
-    .from("event_organizers")
-    .select("user_id")
-    .eq("event_id", channel.eventId)
-  for (const o of orgs ?? []) organizerUserIds.push(o.user_id)
+  const organizerUserIds = await getOrganizerUserIdsForEvent(channel.eventId)
 
   const { data: adminRoles } = await supabase.from("roles").select("id").eq("name", "admin")
   if (adminRoles && adminRoles.length > 0) {
@@ -300,10 +310,10 @@ export async function getChannelMemberUserIds(channel: ChatChannel): Promise<str
 
 export async function sendMessage(channelId: string, senderId: string, content: string): Promise<ChatMessage> {
   const trimmed = content.trim()
-  if (!trimmed) throw new Error("Message cannot be empty")
+  if (!trimmed) throw new Error(t("Message cannot be empty"))
 
   const channel = await getChannelById(channelId)
-  if (!channel) throw new Error("Channel not found")
+  if (!channel) throw new Error(t("Channel not found"))
 
   // Private 1:1 channels are only writable by the two parties (NF3).
   if (channel.channelType === "private") {
@@ -314,7 +324,7 @@ export async function sendMessage(channelId: string, senderId: string, content: 
       .maybeSingle()
     const attendeeUserId = (attendee as any)?.user_id
     if (senderId !== channel.organizerId && senderId !== attendeeUserId) {
-      throw new Error("You do not have access to this channel")
+      throw new Error(t("You do not have access to this channel"))
     }
   }
 
@@ -348,9 +358,13 @@ async function notifyChannelMembers(channelId: string, senderId: string): Promis
     .eq("user_id", senderId)
     .single()
 
-  const senderName = sender ? `${sender.first_name} ${sender.last_name}`.trim() : "Someone"
-  const label = channel.channelType === "general" ? "the event community" : "a private chat"
-  const message = `${senderName} sent a message in ${label} of "${event?.title ?? "event"}".`
+  const senderName = sender ? `${sender.first_name} ${sender.last_name}`.trim() : t("Someone")
+  const label = channel.channelType === "general" ? t("the event community") : t("a private chat")
+  const message = t("{sender} sent a message in {label} of \"{event}\".", {
+    sender: senderName,
+    label,
+    event: event?.title ?? t("event"),
+  })
 
   const rows = recipients.map((userId) => ({
     user_id: userId,

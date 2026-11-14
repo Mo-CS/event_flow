@@ -1,3 +1,4 @@
+import { t } from "../../i18n"
 import { CalendarDays, MapPin, Search, Ticket } from "lucide-react"
 
 interface SuggestionChipsProps {
@@ -7,23 +8,23 @@ interface SuggestionChipsProps {
 
 const suggestions = [
   {
-    label: "Upcoming events",
-    message: "Show me upcoming events",
+    label: t("Upcoming events"),
+    message: t("Show me upcoming events"),
     icon: CalendarDays,
   },
   {
-    label: "Find by category",
-    message: "What event categories are available?",
+    label: t("Find by category"),
+    message: t("What event categories are available?"),
     icon: Search,
   },
   {
-    label: "Available venues",
-    message: "What venues are available?",
+    label: t("Available venues"),
+    message: t("What venues are available?"),
     icon: MapPin,
   },
   {
-    label: "Get tickets",
-    message: "How do I register for an event?",
+    label: t("Get tickets"),
+    message: t("How do I register for an event?"),
     icon: Ticket,
   },
 ]

@@ -1,3 +1,5 @@
+import { t } from "../i18n"
+
 const requestCounts = new Map<string, { count: number; resetAt: number }>()
 
 export async function checkRateLimit(key: string, maxRequests = 30, windowMs = 60000): Promise<void> {
@@ -9,7 +11,7 @@ export async function checkRateLimit(key: string, maxRequests = 30, windowMs = 6
   }
   if (entry.count >= maxRequests) {
     const retryAfter = Math.ceil((entry.resetAt - now) / 1000)
-    throw new Error(`Rate limit exceeded. Try again in ${retryAfter} seconds.`)
+    throw new Error(t("Rate limit exceeded. Try again in {seconds} seconds.", { seconds: retryAfter }))
   }
   entry.count++
 }

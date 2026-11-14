@@ -1,9 +1,10 @@
+import { t } from "../i18n"
 import { supabase } from "../lib/supabase"
 import type { DeviceSession } from "../types"
 import { isMissingFunction, isMissingRelation } from "../lib/supabaseErrors"
 
 export function detectDeviceName(): string {
-  if (typeof navigator === "undefined") return "Unknown device"
+  if (typeof navigator === "undefined") return t("Unknown device")
   const ua = navigator.userAgent
   const known = [
     ["Chrome", "Chrome"],
@@ -16,7 +17,7 @@ export function detectDeviceName(): string {
   for (const [token, name] of known) {
     if (ua.includes(token)) return `${name} · ${detectOS(ua)}`
   }
-  return `Browser · ${detectOS(ua)}`
+  return `${t("Browser")} · ${detectOS(ua)}`
 }
 
 function detectOS(ua: string): string {

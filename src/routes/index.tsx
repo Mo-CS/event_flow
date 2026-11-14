@@ -36,6 +36,17 @@ import { Reports } from "../pages/Reports"
 import { FeedbackManagement } from "../pages/FeedbackManagement"
 import { SystemSettings } from "../pages/SystemSettings"
 import { SecurityCenter } from "../pages/SecurityCenter"
+import { EventMeeting } from "../pages/EventMeeting"
+import { Bans } from "../pages/Bans"
+import { EventRequestForm } from "../pages/EventRequestForm"
+import { EventRequests } from "../pages/EventRequests"
+import { Finance } from "../pages/Finance"
+import { Audience } from "../pages/Audience"
+import { Campaigns } from "../pages/Campaigns"
+import { Broadcast } from "../pages/Broadcast"
+import { PasswordResets } from "../pages/PasswordResets"
+import { ChangePassword } from "../pages/ChangePassword"
+import { RestoreAccount } from "../pages/RestoreAccount"
 import { NotFound } from "../pages/NotFound"
 
 export const router = createBrowserRouter([
@@ -53,6 +64,7 @@ export const router = createBrowserRouter([
       { path: "register", element: <Register /> },
       { path: "forgot-password", element: <ForgotPassword /> },
       { path: "reset-password", element: <ResetPassword /> },
+      { path: "restore-account", element: <RestoreAccount /> },
     ],
   },
   {
@@ -73,6 +85,15 @@ export const router = createBrowserRouter([
       { path: "admin/settings", element: <ProtectedRoute roles={["admin"]}><SystemSettings /></ProtectedRoute> },
       { path: "admin/security", element: <ProtectedRoute roles={["admin"]}><SecurityCenter /></ProtectedRoute> },
       { path: "feedback", element: <ProtectedRoute roles={["organizer", "admin"]}><FeedbackManagement /></ProtectedRoute> },
+      { path: "change-password", element: <ChangePassword /> },
+      { path: "event-requests", element: <EventRequests /> },
+      { path: "event-requests/new", element: <EventRequestForm /> },
+      { path: "bans", element: <ProtectedRoute roles={["organizer", "admin"]}><Bans /></ProtectedRoute> },
+      { path: "finance", element: <ProtectedRoute roles={["organizer", "admin"]}><Finance /></ProtectedRoute> },
+      { path: "audience", element: <Audience /> },
+      { path: "campaigns", element: <Campaigns /> },
+      { path: "admin/broadcast", element: <ProtectedRoute roles={["admin"]}><Broadcast /></ProtectedRoute> },
+      { path: "admin/password-resets", element: <ProtectedRoute roles={["admin"]}><PasswordResets /></ProtectedRoute> },
       { path: "events", element: <ProtectedRoute roles={["organizer", "admin"]}><EventManagement /></ProtectedRoute> },
       { path: "events/new", element: <ProtectedRoute roles={["organizer", "admin"]}><EventForm /></ProtectedRoute> },
       { path: "events/:id/edit", element: <ProtectedRoute roles={["organizer", "admin"]}><EventForm /></ProtectedRoute> },
@@ -84,6 +105,7 @@ export const router = createBrowserRouter([
       { path: "events/:eventId/evaluation", element: <ProtectedRoute roles={["organizer", "admin"]}><EvaluationManagement /></ProtectedRoute> },
       { path: "events/:eventId/organizers", element: <ProtectedRoute roles={["admin"]}><EventOrganizers /></ProtectedRoute> },
       { path: "events/:eventId/chat", element: <ProtectedRoute roles={["organizer", "admin", "attendee"]}><EventChat /></ProtectedRoute> },
+      { path: "events/:eventId/meeting", element: <ProtectedRoute roles={["attendee", "organizer", "admin"]}><EventMeeting /></ProtectedRoute> },
       { path: "profile", element: <Profile /> },
       { path: "tickets/:id", element: <TicketDetail /> },
       { path: "notifications", element: <Notifications /> },

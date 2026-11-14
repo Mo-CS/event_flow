@@ -1,3 +1,5 @@
+import { formatDate } from "../i18n/format"
+import { t } from "../i18n"
 import { useState, useEffect, useCallback } from "react"
 import { Star, MessageSquare, CheckCheck } from "lucide-react"
 import { toast } from "sonner"
@@ -32,7 +34,7 @@ export function FeedbackManagement() {
         setProfileMap(new Map(profs.map((p: any) => [p.id, p])))
       }
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to load")
+      toast.error(e?.message ?? t("Failed to load"))
     } finally {
       setLoading(false)
     }
@@ -44,23 +46,23 @@ export function FeedbackManagement() {
     if (!responseText.trim()) return
     try {
       await respondToFeedback(fbId, responseText.trim())
-      toast.success("Response posted")
+      toast.success(t("Response posted"))
       setResponding(null)
       setResponseText("")
       fetch()
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to post response")
+      toast.error(e?.message ?? t("Failed to post response"))
     }
   }
 
-  if (loading) return <Loading text="Loading feedback..." />
+  if (loading) return <Loading text={t("Loading feedback...")} />
 
   return (
     <div className="space-y-6">
-      <h1 className="text-2xl font-bold">Event Feedback</h1>
+      <h1 className="text-2xl font-bold">{t("Event Feedback")}</h1>
 
       {feedbackList.length === 0 ? (
-        <EmptyState title="No feedback yet" description="Reviews from attendees will appear here." />
+        <EmptyState title={t("No feedback yet")} description={t("Reviews from attendees will appear here.")} />
       ) : (
         <div className="space-y-4">
           {feedbackList.map((fb) => {
@@ -82,27 +84,27 @@ export function FeedbackManagement() {
                 </CardHeader>
                 <CardContent className="space-y-3">
                   <p className="text-sm">{fb.comment}</p>
-                  <p className="text-xs text-muted-foreground">{new Date(fb.submittedAt).toLocaleDateString()}</p>
+                  <p className="text-xs text-muted-foreground">{formatDate(new Date(fb.submittedAt))}</p>
 
                   {fb.response ? (
                     <div className="pl-4 border-l-2 border-primary/30">
-                      <p className="text-xs font-medium text-primary flex items-center gap-1"><CheckCheck size={12} /> Your response</p>
+                      <p className="text-xs font-medium text-primary flex items-center gap-1"><CheckCheck size={12} /> {t("Your response")}</p>
                       <p className="text-sm text-muted-foreground mt-1">{fb.response}</p>
-                      <p className="text-xs text-muted-foreground mt-1">{fb.respondedAt ? new Date(fb.respondedAt).toLocaleDateString() : ""}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{fb.respondedAt ? formatDate(new Date(fb.respondedAt)) : ""}</p>
                     </div>
                   ) : (
                     <div>
                       {responding === fb.id ? (
                         <div className="space-y-2">
-                          <Textarea placeholder="Write your response..." value={responseText} onChange={(e) => setResponseText(e.target.value)} rows={2} />
+                          <Textarea placeholder={t("Write your response...")} value={responseText} onChange={(e) => setResponseText(e.target.value)} rows={2} />
                           <div className="flex gap-2">
-                            <Button size="sm" onClick={() => handleRespond(fb.id)} disabled={!responseText.trim()}>Post Response</Button>
-                            <Button size="sm" variant="ghost" onClick={() => { setResponding(null); setResponseText("") }}>Cancel</Button>
+                            <Button size="sm" onClick={() => handleRespond(fb.id)} disabled={!responseText.trim()}>{t("Post Response")}</Button>
+                            <Button size="sm" variant="ghost" onClick={() => { setResponding(null); setResponseText("") }}>{t("Cancel")}</Button>
                           </div>
                         </div>
                       ) : (
                         <Button size="sm" variant="ghost" className="gap-1" onClick={() => setResponding(fb.id)}>
-                          <MessageSquare size={14} /> Respond
+                          <MessageSquare size={14} /> {t("Respond")}
                         </Button>
                       )}
                     </div>

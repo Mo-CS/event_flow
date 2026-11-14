@@ -1,17 +1,22 @@
 import { StrictMode } from "react"
 import { createRoot } from "react-dom/client"
-import { RouterProvider } from "react-router-dom"
 import { AuthProvider } from "./contexts/AuthContext"
+import { SettingsProvider } from "./contexts/SettingsContext"
 import { ThemeProvider } from "./contexts/ThemeContext"
-import { router } from "./routes"
+import { LanguageProvider } from "./i18n"
+import { App } from "./App"
 import "./index.css"
 
 createRoot(document.getElementById("root")!).render(
   <StrictMode>
-    <ThemeProvider>
-      <AuthProvider>
-        <RouterProvider router={router} />
-      </AuthProvider>
-    </ThemeProvider>
+    <LanguageProvider>
+      <ThemeProvider>
+        <SettingsProvider>
+          <AuthProvider>
+            <App />
+          </AuthProvider>
+        </SettingsProvider>
+      </ThemeProvider>
+    </LanguageProvider>
   </StrictMode>,
 )

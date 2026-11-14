@@ -1,3 +1,5 @@
+import { formatDate } from "../i18n/format"
+import { t } from "../i18n"
 import { useState, useEffect, useCallback, useRef } from "react"
 import { Upload, Trash2, Download, FileText, Image } from "lucide-react"
 import { toast } from "sonner"
@@ -35,7 +37,7 @@ export function FileManagement() {
         setProfileMap(new Map(profs.map((p: any) => [p.id, p])))
       }
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to load")
+      toast.error(e?.message ?? t("Failed to load"))
     } finally {
       setLoading(false)
     }
@@ -48,13 +50,13 @@ export function FileManagement() {
     setUploading(true)
     try {
       await uploadFile(selectedFile.name, selectedFile.type, selectedFile.size, profile.id)
-      toast.success(`"${selectedFile.name}" uploaded`)
+      toast.success(t("\"{name}\" uploaded", { name: selectedFile.name }))
       setUploadOpen(false)
       setSelectedFile(null)
       if (fileRef.current) fileRef.current.value = ""
       fetch()
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to upload file")
+      toast.error(e?.message ?? t("Failed to upload file"))
     } finally {
       setUploading(false)
     }
@@ -63,10 +65,10 @@ export function FileManagement() {
   const handleDelete = async (file: FileItem) => {
     try {
       await deleteFile(file.id)
-      toast.success(`"${file.name}" deleted`)
+      toast.success(t("\"{name}\" deleted", { name: file.name }))
       fetch()
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to delete file")
+      toast.error(e?.message ?? t("Failed to delete file"))
     }
   }
 
@@ -75,22 +77,22 @@ export function FileManagement() {
     a.href = file.url || "#"
     a.download = file.name
     a.click()
-    toast.success(`Downloading ${file.name}`)
+    toast.success(t("Downloading {name}", { name: file.name }))
   }
 
-  if (loading) return <Loading text="Loading files..." />
+  if (loading) return <Loading text={t("Loading files...")} />
 
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">File Manager</h1>
+        <h1 className="text-2xl font-bold">{t("File Manager")}</h1>
         <Dialog open={uploadOpen} onOpenChange={setUploadOpen}>
           <DialogTrigger asChild>
-            <Button className="gap-2"><Upload size={16} /> Upload File</Button>
+            <Button className="gap-2"><Upload size={16} /> {t("Upload File")}</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Upload File</DialogTitle>
+              <DialogTitle>{t("Upload File")}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4 pt-4">
               <Input ref={fileRef} type="file" onChange={(e) => setSelectedFile(e.target.files?.[0] ?? null)} />
@@ -100,7 +102,7 @@ export function FileManagement() {
                 </div>
               )}
               <Button className="w-full" disabled={!selectedFile || uploading} onClick={handleUpload}>
-                {uploading ? "Uploading..." : "Upload"}
+                {uploading ? t("Uploading...") : t("Upload")}
               </Button>
             </div>
           </DialogContent>
@@ -108,7 +110,7 @@ export function FileManagement() {
       </div>
 
       {fileList.length === 0 ? (
-        <EmptyState title="No files" description="Upload your first file." />
+        <EmptyState title={t("No files")} description={t("Upload your first file.")} />
       ) : (
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
           {fileList.map((file) => {
@@ -130,13 +132,13 @@ export function FileManagement() {
                     <span>{formatSize(file.size)}</span>
                     <Badge variant="outline" className="text-[10px] px-1">{file.type.split("/")[1]}</Badge>
                   </div>
-                  <p className="text-[11px] text-muted-foreground mt-1">{uploader?.firstName} {uploader?.lastName} · {new Date(file.createdAt).toLocaleDateString()}</p>
+                  <p className="text-[11px] text-muted-foreground mt-1">{uploader?.firstName} {uploader?.lastName} · {formatDate(new Date(file.createdAt))}</p>
                   <div className="flex gap-2 mt-3 pt-3 border-t border-border">
                     <Button size="sm" variant="ghost" className="gap-1" onClick={() => handleDownload(file)}>
-                      <Download size={14} /> Download
+                      <Download size={14} /> {t("Download")}
                     </Button>
                     <Button size="sm" variant="ghost" className="gap-1 text-destructive ml-auto" onClick={() => handleDelete(file)}>
-                      <Trash2 size={14} /> Delete
+                      <Trash2 size={14} /> {t("Delete")}
                     </Button>
                   </div>
                 </CardContent>

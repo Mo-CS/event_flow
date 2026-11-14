@@ -1,3 +1,4 @@
+import { t } from "../i18n"
 import { useState } from "react"
 import { Link, useNavigate, Navigate } from "react-router-dom"
 import { toast } from "sonner"
@@ -16,11 +17,11 @@ export function Login() {
     e.preventDefault()
     setError("")
     try {
-      await login(email, password)
-      toast.success("Welcome back!")
-      navigate("/dashboard")
-    } catch {
-      setError("Invalid email or password")
+      const loggedIn = await login(email, password)
+      toast.success(t("Welcome back!"))
+      navigate(loggedIn.mustChangePassword ? "/dashboard/change-password" : "/dashboard")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : t("Invalid email or password"))
     }
   }
 
@@ -40,8 +41,8 @@ export function Login() {
               <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-teal-500 via-amber-500 to-emerald-500 flex items-center justify-center mx-auto mb-4 shadow-xl shadow-teal-500/25">
                 <LogIn size={24} className="text-white" />
               </div>
-              <h1 className="text-2xl font-bold">Login</h1>
-              <p className="text-sm text-muted-foreground mt-1">Welcome back to EventFlow</p>
+              <h1 className="text-2xl font-bold">{t("Login")}</h1>
+              <p className="text-sm text-muted-foreground mt-1">{t("Welcome back to EventFlow")}</p>
             </div>
 
             <form onSubmit={handleSubmit} className="space-y-4">
@@ -51,25 +52,29 @@ export function Login() {
                 </div>
               )}
               <div>
-                <label className="block text-sm font-medium mb-1.5">Email</label>
+                <label className="block text-sm font-medium mb-1.5">{t("Email")}</label>
                 <input type="email" value={email} onChange={(e) => setEmail(e.target.value)} required
                   className="w-full px-3 py-2.5 rounded-lg border border-input bg-background/50 text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
                   placeholder="you@example.com" />
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1.5">Password</label>
+                <label className="block text-sm font-medium mb-1.5">{t("Password")}</label>
                 <input type="password" value={password} onChange={(e) => setPassword(e.target.value)} required
                   className="w-full px-3 py-2.5 rounded-lg border border-input bg-background/50 text-foreground focus:outline-none focus:ring-2 focus:ring-ring transition-shadow"
-                  placeholder="Enter your password" />
+                  placeholder={t("Enter your password")} />
               </div>
               <button type="submit" disabled={isLoading}
                 className="w-full bg-gradient-to-r from-teal-500 via-amber-500 to-emerald-500 text-white py-2.5 rounded-lg font-medium hover:opacity-90 transition-opacity disabled:opacity-50 shadow-lg shadow-teal-500/25">
-                {isLoading ? "Logging in..." : "Login"}
+                {isLoading ? t("Logging in...") : t("Login")}
               </button>
               <div className="flex justify-between text-sm">
-                <Link to="/forgot-password" className="text-primary hover:underline">Forgot password?</Link>
-                <Link to="/register" className="text-primary hover:underline">Create account</Link>
+                <Link to="/forgot-password" className="text-primary hover:underline">{t("Forgot password?")}</Link>
+                <Link to="/register" className="text-primary hover:underline">{t("Create account")}</Link>
               </div>
+              <p className="text-center text-xs text-muted-foreground">
+                {t("Deleted your account?")}{" "}
+                <Link to="/restore-account" className="text-primary hover:underline">{t("Restore it within the recovery window")}</Link>
+              </p>
             </form>
           </div>
         </div>

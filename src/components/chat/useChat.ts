@@ -1,3 +1,4 @@
+import { getLanguage, t } from "../../i18n"
 import { useState, useCallback, useRef } from "react"
 
 const LM_STUDIO_URL = "/lmstudio/v1/chat/completions"
@@ -130,7 +131,7 @@ async function executeTool(
         { headers }
       )
       const events = await eventRes.json()
-      if (events.length === 0) return { error: "Event not found" }
+      if (events.length === 0) return { error: t("Event not found") }
 
       const event = events[0]
 
@@ -253,7 +254,7 @@ async function callLLM(messages: LLMMessage[]): Promise<string> {
 
 async function chatWithTools(userMessage: string): Promise<string> {
   const messages: LLMMessage[] = [
-    { role: "system", content: SYSTEM_PROMPT },
+    { role: "system", content: `${SYSTEM_PROMPT}\n\nAlways answer in ${getLanguage() === "ar" ? "Arabic" : "English"}.` },
     { role: "user", content: userMessage },
   ]
 
@@ -280,7 +281,7 @@ async function chatWithTools(userMessage: string): Promise<string> {
     })
   }
 
-  return "I'm having trouble processing your request. Please try again."
+  return t("I'm having trouble processing your request. Please try again.")
 }
 
 interface UseChatReturn {
@@ -327,7 +328,7 @@ export function useChat(): UseChatReturn {
       setMessages((prev) => [...prev, assistantMsg])
     } catch (err) {
       if (err instanceof DOMException && err.name === "AbortError") return
-      const message = err instanceof Error ? err.message : "Something went wrong"
+      const message = err instanceof Error ? err.message : t("Something went wrong")
       setError(message)
     } finally {
       setIsLoading(false)

@@ -1,3 +1,5 @@
+import { formatDate } from "../i18n/format"
+import { t } from "../i18n"
 import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
 import { Calendar, ArrowRight, Sparkles, TrendingUp, Ticket, Zap } from "lucide-react"
@@ -39,27 +41,27 @@ export function Home() {
         <div className="absolute bottom-20 right-1/3 w-60 h-60 bg-red-500/10 rounded-full blur-3xl" />
         <div className="relative">
           <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-gradient-to-r from-teal-500/20 to-amber-500/20 text-teal-700 dark:text-teal-300 text-sm font-medium mb-6 border border-teal-500/20">
-            <Sparkles size={16} /> All-in-one event platform
+            <Sparkles size={16} /> {t("All-in-one event platform")}
           </div>
           <h1 className="text-5xl lg:text-6xl font-bold mb-4 tracking-tight">
             <span className="bg-gradient-to-r from-[hsl(185,85%,38%)] via-[hsl(165,80%,40%)] to-[hsl(35,92%,52%)] bg-clip-text text-transparent">
-              Discover & Manage
+              {t("Discover & Manage")}
             </span>
             <br />
-            Events
+            {t("Events")}
           </h1>
           <p className="text-lg text-muted-foreground mb-8 max-w-2xl mx-auto leading-relaxed">
-            The all-in-one platform for creating, managing, and attending events. From conferences to workshops, EventFlow makes it seamless.
+            {t("The all-in-one platform for creating, managing, and attending events. From conferences to workshops, EventFlow makes it seamless.")}
           </p>
           <div className="flex gap-4 justify-center flex-wrap">
             <Link to="/events">
               <Button variant="gradient" size="lg" className="gap-2 shadow-lg shadow-teal-500/25">
-                Browse Events <ArrowRight size={18} />
+                {t("Browse Events")} <ArrowRight size={18} />
               </Button>
             </Link>
             <Link to="/register">
               <Button variant="outline" size="lg">
-                Get Started
+                {t("Get Started")}
               </Button>
             </Link>
           </div>
@@ -73,14 +75,14 @@ export function Home() {
         <div className="relative px-8">
           <h2 className="text-2xl font-bold text-center mb-12">
             <span className="bg-gradient-to-r from-teal-500 to-amber-500 bg-clip-text text-transparent">
-              How It Works
+              {t("How It Works")}
             </span>
           </h2>
           <div className="grid md:grid-cols-3 gap-8">
             {[
-              { title: "Create Events", desc: "Organizers can create and publish events in minutes with our powerful tools.", icon: Calendar, grad: "from-teal-500 to-amber-500" },
-              { title: "Register Attendees", desc: "Attendees can browse, register, and receive digital tickets instantly.", icon: Ticket, grad: "from-amber-500 to-orange-500" },
-              { title: "Track Attendance", desc: "Scan QR codes at the door for seamless check-in and attendance tracking.", icon: TrendingUp, grad: "from-red-500 to-amber-500" },
+              { title: t("Create Events"), desc: t("Organizers can create and publish events in minutes with our powerful tools."), icon: Calendar, grad: "from-teal-500 to-amber-500" },
+              { title: t("Register Attendees"), desc: t("Attendees can browse, register, and receive digital tickets instantly."), icon: Ticket, grad: "from-amber-500 to-orange-500" },
+              { title: t("Track Attendance"), desc: t("Scan QR codes at the door for seamless check-in and attendance tracking."), icon: TrendingUp, grad: "from-red-500 to-amber-500" },
             ].map((item) => (
               <div key={item.title} className="relative group">
                 <div className={`absolute -inset-0.5 bg-gradient-to-r ${item.grad} rounded-xl blur-sm opacity-0 group-hover:opacity-30 transition-opacity`} />
@@ -100,8 +102,8 @@ export function Home() {
       {!loading && featured.length > 0 && (
         <section className="py-16">
           <div className="flex items-center justify-between mb-8">
-            <h2 className="text-2xl font-bold">Featured Events</h2>
-            <Link to="/events" className="text-sm text-primary hover:underline">&rarr; View all</Link>
+            <h2 className="text-2xl font-bold">{t("Featured Events")}</h2>
+            <Link to="/events" className="text-sm text-primary hover:underline">{t("→ View all")}</Link>
           </div>
           <div className="grid md:grid-cols-3 gap-6">
             {featured.map((event, idx) => {
@@ -122,7 +124,7 @@ export function Home() {
                         )}
                       </div>
                       <h3 className="font-semibold group-hover:text-primary transition-colors">{event.title}</h3>
-                      <p className="text-xs text-muted-foreground mt-1">{new Date(event.startDate).toLocaleDateString()}</p>
+                      <p className="text-xs text-muted-foreground mt-1">{formatDate(new Date(event.startDate))}</p>
                     </div>
                   </div>
                 </Link>
@@ -144,13 +146,13 @@ export function Home() {
             </div>
             <h2 className="text-3xl font-bold mb-4">
               <span className="bg-gradient-to-r from-teal-500 via-amber-500 to-yellow-500 bg-clip-text text-transparent">
-                Ready to get started?
+                {t("Ready to get started?")}
               </span>
             </h2>
-            <p className="text-muted-foreground mb-6">Create an account and start managing your events today.</p>
+            <p className="text-muted-foreground mb-6">{t("Create an account and start managing your events today.")}</p>
             <Link to="/register">
               <Button variant="gradient" size="lg" className="gap-2 shadow-lg shadow-teal-500/25">
-                Create Free Account <ArrowRight size={18} />
+                {t("Create Free Account")} <ArrowRight size={18} />
               </Button>
             </Link>
           </div>

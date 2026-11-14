@@ -1,3 +1,4 @@
+import { t } from "../i18n"
 import { supabase } from "../lib/supabase"
 import type { Feedback } from "../types"
 
@@ -40,7 +41,7 @@ export async function submitFeedback(data: Omit<Feedback, "id" | "response" | "r
     .eq("event_id", data.eventId)
     .eq("attendee_id", data.attendeeId)
     .maybeSingle()
-  if (existing) throw new Error("You have already submitted feedback for this event")
+  if (existing) throw new Error(t("You have already submitted feedback for this event"))
 
   const { data: inserted, error } = await supabase
     .from("feedback")

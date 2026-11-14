@@ -1,3 +1,5 @@
+import { formatDate } from "../i18n/format"
+import { statusLabel, t } from "../i18n"
 import { useState, useEffect } from "react"
 import { useParams, Link, useNavigate } from "react-router-dom"
 import { ArrowLeft, Download, CheckCircle, AlertCircle } from "lucide-react"
@@ -28,21 +30,21 @@ export function TicketDetail() {
         navigate("/login")
         return
       }
-      let t: Ticket | null = null
+      let loaded: Ticket | null = null
       try {
-        t = (await getTicketForOwner(id, profile.id)) ?? null
+        loaded = (await getTicketForOwner(id, profile.id)) ?? null
       } catch {
-        t = null
+        loaded = null
       }
-      if (!t) { setLoading(false); return }
-      setTicket(t)
-      if (t.qrCodeUrl) {
-        setQrCodeUrl(t.qrCodeUrl)
+      if (!loaded) { setLoading(false); return }
+      setTicket(loaded)
+      if (loaded.qrCodeUrl) {
+        setQrCodeUrl(loaded.qrCodeUrl)
       } else {
-        QRCode.toDataURL(t.uniqueCode, { width: 300, margin: 2 }).then(setQrCodeUrl).catch(() => {})
+        QRCode.toDataURL(loaded.uniqueCode, { width: 300, margin: 2 }).then(setQrCodeUrl).catch(() => {})
       }
       const allRegs = await getAllRegistrations()
-      const reg = allRegs.find((r) => r.id === t.registrationId)
+      const reg = allRegs.find((r) => r.id === loaded.registrationId)
       if (reg) {
         const ev = await getEventById(reg.eventId)
         setEvent(ev ?? null)
@@ -55,53 +57,53 @@ export function TicketDetail() {
     if (!ticket) return
     try {
       await downloadTicket(ticket.id)
-      toast.success("Ticket downloaded")
+      toast.success(t("Ticket downloaded"))
     } catch {
-      toast.error("Failed to download ticket")
+      toast.error(t("Failed to download ticket"))
     }
   }
 
-  if (loading) return <Loading text="Loading ticket..." />
-  if (!ticket) return <div className="text-center py-12 text-muted-foreground">Ticket not found</div>
+  if (loading) return <Loading text={t("Loading ticket...")} />
+  if (!ticket) return <div className="text-center py-12 text-muted-foreground">{t("Ticket not found")}</div>
 
   return (
     <div className="max-w-lg mx-auto space-y-6 py-8">
       <Link to="/dashboard" className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground transition-colors">
-        <ArrowLeft size={16} /> Back to Dashboard
+        <ArrowLeft size={16} /> {t("Back to Dashboard")}
       </Link>
       <Card className="border-2 border-primary/20">
         <CardHeader className="text-center border-b border-border pb-6">
-          <CardTitle className="text-2xl">{event?.title ?? "Event Ticket"}</CardTitle>
-          <p className="text-sm text-muted-foreground">{event ? new Date(event.startDate).toLocaleDateString() : ""}</p>
+          <CardTitle className="text-2xl">{event?.title ?? t("Event Ticket")}</CardTitle>
+          <p className="text-sm text-muted-foreground">{event ? formatDate(new Date(event.startDate)) : ""}</p>
         </CardHeader>
         <CardContent className="pt-6 space-y-6">
           {qrCodeUrl && (
             <div className="flex justify-center">
-              <img src={qrCodeUrl} alt="QR Code" className="w-48 h-48 border border-border rounded-lg" />
+              <img src={qrCodeUrl} alt={t("QR Code")} className="w-48 h-48 border border-border rounded-lg" />
             </div>
           )}
 
           <div className="space-y-3">
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Ticket Code</span>
+              <span className="text-muted-foreground">{t("Ticket Code")}</span>
               <span className="font-mono font-medium">{ticket.uniqueCode}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Issued</span>
-              <span>{new Date(ticket.issuedAt).toLocaleDateString()}</span>
+              <span className="text-muted-foreground">{t("Issued")}</span>
+              <span>{formatDate(new Date(ticket.issuedAt))}</span>
             </div>
             <div className="flex justify-between text-sm">
-              <span className="text-muted-foreground">Status</span>
+              <span className="text-muted-foreground">{t("Status")}</span>
               <Badge variant={ticket.status === "valid" ? "default" : ticket.status === "used" ? "secondary" : "destructive"}>
                 {ticket.status === "valid" && <CheckCircle size={12} className="mr-1" />}
                 {ticket.status === "invalid" && <AlertCircle size={12} className="mr-1" />}
-                {ticket.status}
+                {statusLabel(ticket.status)}
               </Badge>
             </div>
           </div>
 
           <Button className="w-full" onClick={handleDownload}>
-            <Download size={16} /> Download Ticket
+            <Download size={16} /> {t("Download Ticket")}
           </Button>
         </CardContent>
       </Card>

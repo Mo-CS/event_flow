@@ -1,3 +1,5 @@
+import { formatDate } from "../i18n/format"
+import { statusLabel, t } from "../i18n"
 import { useState, useEffect, useCallback } from "react"
 import { Link, useNavigate } from "react-router-dom"
 import { Calendar, Ticket as TicketIcon, Bell, Clock, ExternalLink, Plus, XCircle, TrendingUp, Users, Building2, Layers, FileUp, BarChart3, Settings, Shield, Activity, MessageSquare, Star } from "lucide-react"
@@ -61,7 +63,7 @@ function OrganizerDashboard() {
     })
   }, [profile])
 
-  if (loading) return <Loading text="Loading dashboard..." />
+  if (loading) return <Loading text={t("Loading dashboard...")} />
   if (!stats) return null
 
   return (
@@ -69,23 +71,23 @@ function OrganizerDashboard() {
       <div className="absolute -top-10 -right-10 w-72 h-72 bg-teal-500/12 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-10 -left-10 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute top-1/2 left-1/3 w-56 h-56 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-      <h1 className="text-2xl font-bold">Organizer Dashboard</h1>
+      <h1 className="text-2xl font-bold">{t("Organizer Dashboard")}</h1>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Calendar} label="Total Events" value={stats.totalEvents} idx={0} />
-        <StatCard icon={TrendingUp} label="Published" value={stats.publishedEvents} idx={1} />
-        <StatCard icon={Clock} label="Drafts" value={stats.draftEvents} idx={2} />
-        <StatCard icon={Users} label="Registrations" value={stats.confirmedRegistrations} idx={3} />
+        <StatCard icon={Calendar} label={t("Total Events")} value={stats.totalEvents} idx={0} />
+        <StatCard icon={TrendingUp} label={t("Published")} value={stats.publishedEvents} idx={1} />
+        <StatCard icon={Clock} label={t("Drafts")} value={stats.draftEvents} idx={2} />
+        <StatCard icon={Users} label={t("Registrations")} value={stats.confirmedRegistrations} idx={3} />
       </div>
 
       <Card>
         <CardHeader className="flex-row items-center justify-between">
-          <CardTitle>Your Events</CardTitle>
-          <Button size="sm" onClick={() => navigate("/dashboard/events/new")}><Plus size={14} /> New Event</Button>
+          <CardTitle>{t("Your Events")}</CardTitle>
+          <Button size="sm" onClick={() => navigate("/dashboard/events/new")}><Plus size={14} /> {t("New Event")}</Button>
         </CardHeader>
         <CardContent>
           {events.length === 0 ? (
-            <EmptyState title="No events yet" description="Create your first event to get started." />
+            <EmptyState title={t("No events yet")} description={t("Create your first event to get started.")} />
           ) : (
             <div className="space-y-3">
               {events.map((event) => (
@@ -93,16 +95,16 @@ function OrganizerDashboard() {
                   <Link to={`/events/${event.id}`} className="flex-1 min-w-0">
                     <p className="font-medium group-hover:text-primary transition-colors">{event.title}</p>
                     <div className="flex items-center gap-3 mt-1 text-xs text-muted-foreground">
-                      <span>{new Date(event.startDate).toLocaleDateString()}</span>
-                      <span>{event.capacity} spots</span>
+                      <span>{formatDate(new Date(event.startDate))}</span>
+                      <span>{event.capacity} {t("spots")}</span>
                     </div>
                   </Link>
                   <div className="flex items-center gap-2">
                     <Link to={`/dashboard/events/${event.id}/chat`}>
-                      <Button size="sm" variant="ghost" className="gap-1.5"><MessageSquare size={14} /> Chat</Button>
+                      <Button size="sm" variant="ghost" className="gap-1.5"><MessageSquare size={14} /> {t("Chat")}</Button>
                     </Link>
                     <Badge variant={event.status === "published" ? "default" : event.status === "draft" ? "secondary" : "outline"}>
-                      {event.status}
+                      {statusLabel(event.status)}
                     </Badge>
                   </div>
                 </div>
@@ -142,11 +144,11 @@ function AttendeeDashboard() {
 
   const handleCancel = async (reg: Registration) => {
     await cancelRegistration(reg.id)
-    toast.success("Registration cancelled")
+    toast.success(t("Registration cancelled"))
     fetchData()
   }
 
-  if (loading) return <Loading text="Loading dashboard..." />
+  if (loading) return <Loading text={t("Loading dashboard...")} />
   if (!stats) return null
 
   return (
@@ -154,22 +156,22 @@ function AttendeeDashboard() {
       <div className="absolute -top-10 -right-10 w-72 h-72 bg-teal-500/12 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-10 -left-10 w-64 h-64 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute top-1/2 right-1/3 w-56 h-56 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-      <h1 className="text-2xl font-bold">My Dashboard</h1>
+      <h1 className="text-2xl font-bold">{t("My Dashboard")}</h1>
 
       <div className="grid sm:grid-cols-3 gap-4">
-        <StatCard icon={Calendar} label="Registered Events" value={stats.totalRegistered} idx={0} />
-        <StatCard icon={TicketIcon} label="Total Tickets" value={myTickets.length} idx={1} />
-        <StatCard icon={Bell} label="Notifications" value={notifs.length} idx={2} />
+        <StatCard icon={Calendar} label={t("Registered Events")} value={stats.totalRegistered} idx={0} />
+        <StatCard icon={TicketIcon} label={t("Total Tickets")} value={myTickets.length} idx={1} />
+        <StatCard icon={Bell} label={t("Notifications")} value={notifs.length} idx={2} />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>My Registrations</CardTitle>
+          <CardTitle>{t("My Registrations")}</CardTitle>
         </CardHeader>
         <CardContent>
           {myRegs.length === 0 ? (
-            <EmptyState title="No registrations yet" description="Browse events and register for one!" action={
-              <Link to="/events"><Button size="sm">Browse Events</Button></Link>
+            <EmptyState title={t("No registrations yet")} description={t("Browse events and register for one!")} action={
+              <Link to="/events"><Button size="sm">{t("Browse Events")}</Button></Link>
             } />
           ) : (
             <div className="space-y-3">
@@ -183,28 +185,28 @@ function AttendeeDashboard() {
                       </Link>
                       <div className="flex items-center gap-2 mt-1">
                         <Badge variant={reg.status === "confirmed" ? "default" : reg.status === "waitlisted" ? "outline" : "secondary"}>
-                          {reg.status}
+                          {statusLabel(reg.status)}
                         </Badge>
-                        <span className="text-xs text-muted-foreground">{event?.startDate ? `${new Date(event.startDate).toLocaleDateString()} - ${new Date(event.endDate!).toLocaleDateString()}` : new Date(reg.registeredAt).toLocaleDateString()}</span>
+                        <span className="text-xs text-muted-foreground">{event?.startDate ? `${formatDate(new Date(event.startDate))} - ${formatDate(new Date(event.endDate!))}` : formatDate(new Date(reg.registeredAt))}</span>
                       </div>
                     </div>
                     {reg.status !== "cancelled" && (
                       <div className="flex items-center gap-2">
                         <Link to={`/dashboard/events/${reg.eventId}/chat`}>
                           <Button size="sm" variant="outline" className="gap-1.5">
-                            <MessageSquare size={14} /> Chat
+                            <MessageSquare size={14} /> {t("Chat")}
                           </Button>
                         </Link>
                         {event?.endDate && new Date(event.endDate) < new Date() && (
                           <Link to={`/events/${reg.eventId}/evaluate`}>
                             <Button size="sm" variant="outline" className="gap-1.5">
-                              <Star size={14} /> Evaluate
+                              <Star size={14} /> {t("Evaluate")}
                             </Button>
                           </Link>
                         )}
                         {new Date(event?.endDate ?? Date.now()) > new Date() && (
                           <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleCancel(reg)}>
-                            <XCircle size={14} /> Cancel
+                            <XCircle size={14} /> {t("Cancel")}
                           </Button>
                         )}
                       </div>
@@ -220,7 +222,7 @@ function AttendeeDashboard() {
       {myTickets.length > 0 && (
         <Card>
           <CardHeader>
-            <CardTitle>My Tickets</CardTitle>
+            <CardTitle>{t("My Tickets")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
@@ -230,10 +232,10 @@ function AttendeeDashboard() {
                   <Link key={ticket.id} to={`/dashboard/tickets/${ticket.id}`} className="flex items-center justify-between p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors group">
                     <div>
                       <p className="font-mono text-sm font-medium">{ticket.uniqueCode}</p>
-                      <p className="text-xs text-muted-foreground">Issued {new Date(ticket.issuedAt).toLocaleDateString()}</p>
+                      <p className="text-xs text-muted-foreground">{t("Issued")} {formatDate(new Date(ticket.issuedAt))}</p>
                     </div>
                     <div className="flex items-center gap-2">
-                      <Badge variant={badgeVariant}>{ticket.status}</Badge>
+                      <Badge variant={badgeVariant}>{statusLabel(ticket.status)}</Badge>
                       <ExternalLink size={14} className="text-muted-foreground opacity-0 group-hover:opacity-100 transition-opacity" />
                     </div>
                   </Link>
@@ -247,13 +249,13 @@ function AttendeeDashboard() {
       {(stats.upcomingEvents.length > 0 || stats.pastEvents.length > 0) && (
         <Card>
           <CardHeader>
-            <CardTitle>My Events</CardTitle>
+            <CardTitle>{t("My Events")}</CardTitle>
           </CardHeader>
           <CardContent>
             <div className="space-y-3">
               {stats.upcomingEvents.length > 0 && (
                 <>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">Upcoming</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">{t("Upcoming")}</p>
                   {stats.upcomingEvents.map((event: Event) => (
                     <Link key={event.id} to={`/events/${event.id}`} className="flex items-center gap-4 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors group">
                       <div className="p-2 rounded-xl bg-gradient-to-br from-teal-500/15 to-amber-500/15">
@@ -261,7 +263,7 @@ function AttendeeDashboard() {
                       </div>
                       <div className="flex-1">
                         <p className="font-medium group-hover:text-primary transition-colors">{event.title}</p>
-                        <p className="text-xs text-muted-foreground">{new Date(event.startDate).toLocaleDateString()} - {new Date(event.endDate).toLocaleDateString()} · {event.capacity} spots</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(new Date(event.startDate))} - {formatDate(new Date(event.endDate))} · {event.capacity} {t("spots")}</p>
                       </div>
                       <ExternalLink size={14} className="text-muted-foreground" />
                     </Link>
@@ -270,7 +272,7 @@ function AttendeeDashboard() {
               )}
               {stats.pastEvents.length > 0 && (
                 <>
-                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-4">Past</p>
+                  <p className="text-xs font-semibold uppercase tracking-wider text-muted-foreground mt-4">{t("Past")}</p>
                   {stats.pastEvents.map((event: Event) => (
                     <Link key={event.id} to={`/events/${event.id}`} className="flex items-center gap-4 p-3 rounded-lg border border-border hover:bg-accent/50 transition-colors group opacity-70 hover:opacity-100 transition-opacity">
                       <div className="p-2 rounded-xl bg-gradient-to-br from-muted to-muted">
@@ -278,7 +280,7 @@ function AttendeeDashboard() {
                       </div>
                       <div className="flex-1">
                         <p className="font-medium group-hover:text-primary transition-colors">{event.title}</p>
-                        <p className="text-xs text-muted-foreground">{new Date(event.startDate).toLocaleDateString()} - {new Date(event.endDate).toLocaleDateString()}</p>
+                        <p className="text-xs text-muted-foreground">{formatDate(new Date(event.startDate))} - {formatDate(new Date(event.endDate))}</p>
                       </div>
                       <ExternalLink size={14} className="text-muted-foreground" />
                     </Link>
@@ -292,17 +294,17 @@ function AttendeeDashboard() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Notifications</CardTitle>
+          <CardTitle>{t("Notifications")}</CardTitle>
         </CardHeader>
         <CardContent>
           {notifs.length === 0 ? (
-            <EmptyState title="No notifications" description="You're all caught up!" />
+            <EmptyState title={t("No notifications")} description={t("You're all caught up!")} />
           ) : (
             <div className="space-y-2">
               {notifs.map((n) => (
                 <div key={n.id} className={`p-3 rounded-lg border border-border ${!n.readAt ? "bg-teal-500/5 border-teal-500/20" : ""}`}>
                   <p className="text-sm font-medium">{n.message}</p>
-                  <p className="text-xs text-muted-foreground mt-1">{new Date(n.createdAt).toLocaleDateString()}</p>
+                  <p className="text-xs text-muted-foreground mt-1">{formatDate(new Date(n.createdAt))}</p>
                 </div>
               ))}
             </div>
@@ -314,13 +316,13 @@ function AttendeeDashboard() {
 }
 
 const adminLinks = [
-  { to: "/dashboard/admin/users", label: "Users", icon: Users, description: "Manage user accounts" },
-  { to: "/dashboard/admin/venues", label: "Venues", icon: Building2, description: "Manage venues" },
-  { to: "/dashboard/admin/categories", label: "Categories", icon: Layers, description: "Manage categories" },
-  { to: "/dashboard/admin/files", label: "Files", icon: FileUp, description: "Manage uploaded files" },
-  { to: "/dashboard/admin/reports", label: "Reports", icon: BarChart3, description: "View reports" },
-  { to: "/dashboard/admin/settings", label: "Settings", icon: Settings, description: "System settings" },
-  { to: "/dashboard/admin/security", label: "Security", icon: Shield, description: "Security center" },
+  { to: "/dashboard/admin/users", label: t("Users"), icon: Users, description: t("Manage user accounts") },
+  { to: "/dashboard/admin/venues", label: t("Venues"), icon: Building2, description: t("Manage venues") },
+  { to: "/dashboard/admin/categories", label: t("Categories"), icon: Layers, description: t("Manage categories") },
+  { to: "/dashboard/admin/files", label: t("Files"), icon: FileUp, description: t("Manage uploaded files") },
+  { to: "/dashboard/admin/reports", label: t("Reports"), icon: BarChart3, description: t("View reports") },
+  { to: "/dashboard/admin/settings", label: t("Settings"), icon: Settings, description: t("System settings") },
+  { to: "/dashboard/admin/security", label: t("Security"), icon: Shield, description: t("Security center") },
 ]
 
 const activityColors = [
@@ -346,7 +348,7 @@ function AdminOverview() {
     })
   }, [])
 
-  if (loading) return <Loading text="Loading dashboard..." />
+  if (loading) return <Loading text={t("Loading dashboard...")} />
   if (!stats) return null
 
   return (
@@ -354,18 +356,18 @@ function AdminOverview() {
       <div className="absolute -top-10 left-1/3 w-80 h-80 bg-teal-500/12 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute top-20 -right-10 w-72 h-72 bg-amber-500/10 rounded-full blur-3xl pointer-events-none" />
       <div className="absolute -bottom-10 left-1/4 w-64 h-64 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none" />
-      <h1 className="text-2xl font-bold">Admin Dashboard</h1>
+      <h1 className="text-2xl font-bold">{t("Admin Dashboard")}</h1>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-4">
-        <StatCard icon={Users} label="Total Users" value={stats.totalUsers} idx={0} to="/dashboard/admin/users" />
-        <StatCard icon={Calendar} label="Published Events" value={stats.publishedEvents} idx={1} to="/dashboard/admin/reports" />
-        <StatCard icon={TicketIcon} label="Registrations" value={stats.confirmedRegistrations} idx={2} to="/dashboard/admin/reports" />
-        <StatCard icon={Building2} label="Venues" value={stats.totalVenues} idx={3} to="/dashboard/admin/venues" />
+        <StatCard icon={Users} label={t("Total Users")} value={stats.totalUsers} idx={0} to="/dashboard/admin/users" />
+        <StatCard icon={Calendar} label={t("Published Events")} value={stats.publishedEvents} idx={1} to="/dashboard/admin/reports" />
+        <StatCard icon={TicketIcon} label={t("Registrations")} value={stats.confirmedRegistrations} idx={2} to="/dashboard/admin/reports" />
+        <StatCard icon={Building2} label={t("Venues")} value={stats.totalVenues} idx={3} to="/dashboard/admin/venues" />
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle>Quick Access</CardTitle>
+          <CardTitle>{t("Quick Access")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-3">
@@ -386,11 +388,11 @@ function AdminOverview() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Recent Activity</CardTitle>
+          <CardTitle>{t("Recent Activity")}</CardTitle>
         </CardHeader>
         <CardContent>
           {activity.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">No recent activity</p>
+            <p className="text-sm text-muted-foreground text-center py-4">{t("No recent activity")}</p>
           ) : (
             <div className="space-y-4">
               {activity.map((item, i) => (
@@ -412,11 +414,11 @@ function AdminOverview() {
 
       <Card>
         <CardHeader>
-          <CardTitle>Registration Trends (Last 7 Days)</CardTitle>
+          <CardTitle>{t("Registration Trends (Last 7 Days)")}</CardTitle>
         </CardHeader>
         <CardContent>
           {trends.length === 0 ? (
-            <p className="text-sm text-muted-foreground text-center py-4">No registration data</p>
+            <p className="text-sm text-muted-foreground text-center py-4">{t("No registration data")}</p>
           ) : (
             <div className="flex items-end gap-2 h-32">
               {(() => {

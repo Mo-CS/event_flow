@@ -1,3 +1,5 @@
+import { formatTime } from "../i18n/format"
+import { t } from "../i18n"
 import { useState, useEffect, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { ArrowLeft, Search, Scan, Camera, CheckCircle, LogOut, User } from "lucide-react"
@@ -23,6 +25,8 @@ export function AttendanceManagement() {
   const { profile, role } = useAuth()
   const navigate = useNavigate()
   const [eventTitle, setEventTitle] = useState("")
+  const [isHybrid, setIsHybrid] = useState(false)
+  const [modeFilter, setModeFilter] = useState<"all" | "online" | "in_person">("all")
   const [registrations, setRegistrations] = useState<Registration[]>([])
   const [attendanceRecords, setAttendanceRecords] = useState<Map<string, Attendance>>(new Map())
   const [ticketMap, setTicketMap] = useState<Map<string, Ticket>>(new Map())
@@ -47,6 +51,7 @@ export function AttendanceManagement() {
       if (!event) { navigate("/dashboard/events"); return }
       if (event.organizerId !== profile?.id && role !== "admin") { navigate("/dashboard/events"); return }
       setEventTitle(event.title)
+      setIsHybrid(event.eventType === "hybrid")
       const regs = await getRegistrations(eventId)
       const confirmed = regs.filter((r) => r.status === "confirmed").sort((a, b) => new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime())
       setRegistrations(confirmed)
@@ -71,7 +76,7 @@ export function AttendanceManagement() {
       setAttendanceRecords(amap)
       setTicketMap(tmap)
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to load")
+      toast.error(e?.message ?? t("Failed to load"))
     } finally {
       setLoading(false)
     }
@@ -81,10 +86,10 @@ export function AttendanceManagement() {
 
   const handleCheckIn = async (reg: Registration) => {
     const ticket = ticketMap.get(reg.id)
-    if (!ticket) { toast.error("No ticket found for this registration"); return }
+    if (!ticket) { toast.error(t("No ticket found for this registration")); return }
     try {
-      await checkIn(ticket.id)
-      toast.success(`${profileMap.get(reg.attendeeId)?.firstName ?? "Attendee"} checked in`)
+      await checkIn(ticket.id, { mode: reg.attendanceMode, verifiedBy: profile?.userId })
+      toast.success(t("{name} checked in", { name: profileMap.get(reg.attendeeId)?.firstName ?? t("Attendee") }))
       fetch()
     } catch (e: any) {
       toast.error(e.message)
@@ -95,13 +100,13 @@ export function AttendanceManagement() {
     const ticket = ticketMap.get(reg.id)
     if (!ticket) return
     const att = attendanceRecords.get(ticket.id)
-    if (!att) { toast.error("No check-in record found"); return }
+    if (!att) { toast.error(t("No check-in record found")); return }
     try {
       await checkOut(att.id)
-      toast.success("Checked out")
+      toast.success(t("Checked out"))
       fetch()
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to check out")
+      toast.error(e?.message ?? t("Failed to check out"))
     }
   }
 
@@ -111,19 +116,19 @@ export function AttendanceManagement() {
     try {
       const ticket = await findTicketByCode(code.trim())
       if (!ticket) {
-        toast.error("No ticket found with that code")
+        toast.error(t("No ticket found with that code"))
         return
       }
       const reg = registrations.find((r) => r.id === ticket.registrationId)
       if (!reg) {
-        toast.error("Registration not found for this ticket")
+        toast.error(t("Registration not found for this ticket"))
         return
       }
       const attendee = profileMap.get(reg.attendeeId)
       const existingAtt = await getAttendanceByTicket(ticket.id)
       setPendingConfirm({ ticket, registration: reg, profile: attendee, existingAtt: existingAtt ?? null })
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to look up ticket")
+      toast.error(e?.message ?? t("Failed to look up ticket"))
     } finally {
       setScanning(false)
     }
@@ -134,18 +139,18 @@ export function AttendanceManagement() {
     const { ticket, existingAtt } = pendingConfirm
     try {
       if (existingAtt && existingAtt.checkOutTime) {
-        toast.success("Ticket already checked in and out")
+        toast.success(t("Ticket already checked in and out"))
       } else if (existingAtt) {
         await checkOut(existingAtt.id)
-        toast.success(`${pendingConfirm.profile?.firstName ?? "Attendee"} checked out`)
+        toast.success(t("{name} checked out", { name: pendingConfirm.profile?.firstName ?? t("Attendee") }))
       } else {
-        await checkIn(ticket.id)
-        toast.success(`${pendingConfirm.profile?.firstName ?? "Attendee"} checked in`)
+        await checkIn(ticket.id, { mode: pendingConfirm.registration.attendanceMode, source: "qr_scan", verifiedBy: profile?.userId })
+        toast.success(t("{name} checked in", { name: pendingConfirm.profile?.firstName ?? t("Attendee") }))
       }
       setScanCode("")
       fetch()
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to process check-in")
+      toast.error(e?.message ?? t("Failed to process check-in"))
     } finally {
       setPendingConfirm(null)
       setScanning(false)
@@ -161,39 +166,53 @@ export function AttendanceManagement() {
     lookupTicket(code)
   }
 
-  if (loading) return <Loading text="Loading attendance..." />
+  if (loading) return <Loading text={t("Loading attendance...")} />
+
+  const visibleRegistrations = modeFilter === "all"
+    ? registrations
+    : registrations.filter((r) => (r.attendanceMode ?? "in_person") === modeFilter)
 
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard/events")} className="gap-2">
-        <ArrowLeft size={16} /> Back to Events
+        <ArrowLeft size={16} /> {t("Back to Events")}
       </Button>
 
-      <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Attendance: {eventTitle}</h1>
-        <Badge variant="secondary">{registrations.length} attendees</Badge>
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <h1 className="text-2xl font-bold">{t("Attendance:")} {eventTitle}</h1>
+        <div className="flex items-center gap-2">
+          {isHybrid && (
+            <select value={modeFilter} onChange={(e) => setModeFilter(e.target.value as "all" | "online" | "in_person")}
+              className="px-3 py-2 rounded-lg border border-input bg-background text-sm">
+              <option value="all">{t("All modes")}</option>
+              <option value="in_person">{t("In person")}</option>
+              <option value="online">{t("Online")}</option>
+            </select>
+          )}
+          <Badge variant="secondary">{visibleRegistrations.length} {t("attendees")}</Badge>
+        </div>
       </div>
 
       <Card>
         <CardHeader>
-          <CardTitle className="text-base flex items-center gap-2"><Scan size={16} /> Scan Ticket</CardTitle>
+          <CardTitle className="text-base flex items-center gap-2"><Scan size={16} /> {t("Scan Ticket")}</CardTitle>
         </CardHeader>
         <CardContent>
           <div className="flex gap-2">
             <Input
-              placeholder="Enter ticket code (e.g. TECH-2026-001)"
+              placeholder={t("Enter ticket code (e.g. TECH-2026-001)")}
               value={scanCode}
               onChange={(e) => setScanCode(e.target.value)}
               onKeyDown={(e) => { if (e.key === "Enter") handleScan() }}
             />
             <Button onClick={handleScan} disabled={scanning || !scanCode.trim()} className="gap-2">
-              <Search size={14} /> {scanning ? "Looking up..." : "Find"}
+              <Search size={14} /> {scanning ? t("Looking up...") : t("Find")}
             </Button>
             <Button onClick={() => setShowScanner(true)} variant="outline" className="gap-2">
-              <Camera size={14} /> Scan QR
+              <Camera size={14} /> {t("Scan QR")}
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground mt-2">Type a ticket code or scan the attendee's QR code</p>
+          <p className="text-xs text-muted-foreground mt-2">{t("Type a ticket code or scan the attendee's QR code")}</p>
           {showScanner && <QrScanner onScan={handleQrScan} onClose={() => setShowScanner(false)} />}
         </CardContent>
       </Card>
@@ -203,13 +222,13 @@ export function AttendanceManagement() {
           <DialogHeader>
             <DialogTitle>
               {pendingConfirm?.existingAtt && !pendingConfirm.existingAtt.checkOutTime
-                ? "Check Out Attendee?"
+                ? t("Check Out Attendee?")
                 : pendingConfirm?.existingAtt?.checkOutTime
-                  ? "Already Processed"
-                  : "Check In Attendee?"}
+                  ? t("Already Processed")
+                  : t("Check In Attendee?")}
             </DialogTitle>
             <DialogDescription>
-              Verify the attendee details before confirming.
+              {t("Verify the attendee details before confirming.")}
             </DialogDescription>
           </DialogHeader>
           {pendingConfirm && (
@@ -224,21 +243,21 @@ export function AttendanceManagement() {
                 </div>
               </div>
               <div className="text-sm text-muted-foreground space-y-1">
-                <p>Event: {eventTitle}</p>
-                <p>Status: {
+                <p>{t("Event:")} {eventTitle}</p>
+                <p>{t("Status:")} {
                   pendingConfirm.existingAtt && !pendingConfirm.existingAtt.checkOutTime
-                    ? "Checked in"
+                    ? t("Checked in")
                     : pendingConfirm.existingAtt?.checkOutTime
-                      ? "Checked in & out"
-                      : "Not checked in"
+                      ? t("Checked in & out")
+                      : t("Not checked in")
                 }</p>
                 {pendingConfirm.existingAtt && (
-                  <p>Checked in at: {new Date(pendingConfirm.existingAtt.checkInTime).toLocaleTimeString()}</p>
+                  <p>{t("Checked in at:")} {formatTime(new Date(pendingConfirm.existingAtt.checkInTime))}</p>
                 )}
               </div>
               <div className="flex gap-2">
                 <Button variant="outline" className="flex-1" onClick={() => setPendingConfirm(null)}>
-                  Cancel
+                  {t("Cancel")}
                 </Button>
                 {(!pendingConfirm.existingAtt || !pendingConfirm.existingAtt.checkOutTime) && (
                   <Button
@@ -246,7 +265,7 @@ export function AttendanceManagement() {
                     variant={pendingConfirm.existingAtt ? "secondary" : "default"}
                     onClick={handleConfirmCheckIn}
                   >
-                    {pendingConfirm.existingAtt ? "Check Out" : "Check In"}
+                    {pendingConfirm.existingAtt ? t("Check Out") : t("Check In")}
                   </Button>
                 )}
               </div>
@@ -255,24 +274,25 @@ export function AttendanceManagement() {
         </DialogContent>
       </Dialog>
 
-      {registrations.length === 0 ? (
-        <EmptyState title="No confirmed registrations" description="Only confirmed registrations can check in." />
+      {visibleRegistrations.length === 0 ? (
+        <EmptyState title={t("No confirmed registrations")} description={t("Only confirmed registrations can check in.")} />
       ) : (
         <div className="rounded-lg border border-border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Attendee</TableHead>
-                <TableHead>Ticket Code</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Check-in</TableHead>
-                <TableHead>Check-out</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("Attendee")}</TableHead>
+                <TableHead>{t("Mode")}</TableHead>
+                <TableHead>{t("Ticket Code")}</TableHead>
+                <TableHead>{t("Status")}</TableHead>
+                <TableHead>{t("Check-in")}</TableHead>
+                <TableHead>{t("Check-out")}</TableHead>
+                <TableHead className="text-right">{t("Actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {registrations.map((reg) => {
-    const attendee = profileMap.get(reg.attendeeId)
+              {visibleRegistrations.map((reg) => {
+                const attendee = profileMap.get(reg.attendeeId)
                 const ticket = ticketMap.get(reg.id)
                 const att = ticket ? attendanceRecords.get(ticket.id) : undefined
                 return (
@@ -281,30 +301,35 @@ export function AttendanceManagement() {
                       <p className="font-medium">{attendee?.firstName} {attendee?.lastName}</p>
                     </TableCell>
                     <TableCell>
+                      <Badge variant={(att?.mode ?? reg.attendanceMode) === "online" ? "secondary" : "outline"}>
+                        {(att?.mode ?? reg.attendanceMode) === "online" ? t("Online") : t("In person")}
+                      </Badge>
+                    </TableCell>
+                    <TableCell>
                       <code className="text-xs bg-muted px-2 py-0.5 rounded">{ticket?.uniqueCode ?? "—"}</code>
                     </TableCell>
                     <TableCell>
                       {att ? (
-                        <Badge variant="default" className="bg-green-600">Checked In</Badge>
+                        <Badge variant="default" className="bg-green-600">{t("Checked In")}</Badge>
                       ) : (
-                        <Badge variant="outline">Not Checked In</Badge>
+                        <Badge variant="outline">{t("Not Checked In")}</Badge>
                       )}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {att ? new Date(att.checkInTime).toLocaleTimeString() : "—"}
+                      {att ? formatTime(new Date(att.checkInTime)) : "—"}
                     </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
-                      {att?.checkOutTime ? new Date(att.checkOutTime).toLocaleTimeString() : "—"}
+                      {att?.checkOutTime ? formatTime(new Date(att.checkOutTime)) : "—"}
                     </TableCell>
                     <TableCell className="text-right">
                       {!att && (
                         <Button size="sm" variant="ghost" className="text-green-600" onClick={() => handleCheckIn(reg)}>
-                          <CheckCircle size={14} /> Check In
+                          <CheckCircle size={14} /> {t("Check In")}
                         </Button>
                       )}
                       {att && !att.checkOutTime && (
                         <Button size="sm" variant="ghost" onClick={() => handleCheckOut(reg)}>
-                          <LogOut size={14} /> Check Out
+                          <LogOut size={14} /> {t("Check Out")}
                         </Button>
                       )}
                     </TableCell>

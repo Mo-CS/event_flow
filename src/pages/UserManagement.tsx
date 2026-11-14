@@ -1,3 +1,5 @@
+import { formatDate } from "../i18n/format"
+import { roleLabel, t } from "../i18n"
 import { useState, useEffect, useCallback } from "react"
 import { Link } from "react-router-dom"
 import { Search, ChevronLeft, ChevronRight, Plus } from "lucide-react"
@@ -39,7 +41,7 @@ export function UserManagement() {
       })
       setData(result)
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to load users")
+      toast.error(e?.message ?? t("Failed to load users"))
     } finally {
       setLoading(false)
     }
@@ -50,37 +52,37 @@ export function UserManagement() {
   const handleSuspend = async (id: string, name: string) => {
     try {
       await suspendUser(id)
-      toast.success(`${name} suspended`)
+      toast.success(t("{name} suspended", { name }))
       fetchUsers()
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to suspend user")
+      toast.error(e?.message ?? t("Failed to suspend user"))
     }
   }
 
   const handleActivate = async (id: string, name: string) => {
     try {
       await activateUser(id)
-      toast.success(`${name} activated`)
+      toast.success(t("{name} activated", { name }))
       fetchUsers()
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to activate user")
+      toast.error(e?.message ?? t("Failed to activate user"))
     }
   }
 
   const handleCreate = async () => {
     if (!createForm.email || !createForm.password || !createForm.firstName || !createForm.lastName) {
-      toast.error("All fields are required")
+      toast.error(t("All fields are required"))
       return
     }
     setCreating(true)
     try {
       await createUser({ ...createForm, roleName: createForm.role })
-      toast.success("User created successfully")
+      toast.success(t("User created successfully"))
       setShowCreate(false)
       setCreateForm({ email: "", password: "", firstName: "", lastName: "", role: "attendee" })
       fetchUsers()
     } catch (err) {
-      toast.error(err instanceof Error ? err.message : "Failed to create user")
+      toast.error(err instanceof Error ? err.message : t("Failed to create user"))
     } finally {
       setCreating(false)
     }
@@ -89,48 +91,48 @@ export function UserManagement() {
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">User Management</h1>
+        <h1 className="text-2xl font-bold">{t("User Management")}</h1>
         <Dialog open={showCreate} onOpenChange={setShowCreate}>
           <DialogTrigger asChild>
-            <Button><Plus size={16} /> Create User</Button>
+            <Button><Plus size={16} /> {t("Create User")}</Button>
           </DialogTrigger>
           <DialogContent>
             <DialogHeader>
-              <DialogTitle>Create User</DialogTitle>
+              <DialogTitle>{t("Create User")}</DialogTitle>
             </DialogHeader>
             <div className="space-y-4">
               <div>
-                <label className="text-sm font-medium">Email</label>
+                <label className="text-sm font-medium">{t("Email")}</label>
                 <Input value={createForm.email} onChange={(e) => setCreateForm((f) => ({ ...f, email: e.target.value }))} />
               </div>
               <div>
-                <label className="text-sm font-medium">Password</label>
+                <label className="text-sm font-medium">{t("Password")}</label>
                 <Input type="password" value={createForm.password} onChange={(e) => setCreateForm((f) => ({ ...f, password: e.target.value }))} />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="text-sm font-medium">First Name</label>
+                  <label className="text-sm font-medium">{t("First Name")}</label>
                   <Input value={createForm.firstName} onChange={(e) => setCreateForm((f) => ({ ...f, firstName: e.target.value }))} />
                 </div>
                 <div>
-                  <label className="text-sm font-medium">Last Name</label>
+                  <label className="text-sm font-medium">{t("Last Name")}</label>
                   <Input value={createForm.lastName} onChange={(e) => setCreateForm((f) => ({ ...f, lastName: e.target.value }))} />
                 </div>
               </div>
               <div>
-                <label className="text-sm font-medium">Role</label>
+                <label className="text-sm font-medium">{t("Role")}</label>
                 <select
                   value={createForm.role}
                   onChange={(e) => setCreateForm((f) => ({ ...f, role: e.target.value as RoleName }))}
                   className="w-full rounded-lg border border-input bg-background px-3 py-2 text-sm mt-1"
                 >
-                  <option value="attendee">Attendee</option>
-                  <option value="organizer">Organizer</option>
-                  <option value="admin">Admin</option>
+                  <option value="attendee">{t("Attendee")}</option>
+                  <option value="organizer">{t("Organizer")}</option>
+                  <option value="admin">{t("Admin")}</option>
                 </select>
               </div>
               <Button className="w-full" onClick={handleCreate} disabled={creating}>
-                {creating ? "Creating..." : "Create User"}
+                {creating ? t("Creating...") : t("Create User")}
               </Button>
             </div>
           </DialogContent>
@@ -141,7 +143,7 @@ export function UserManagement() {
         <div className="relative flex-1 min-w-[200px] max-w-sm">
           <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
           <Input
-            placeholder="Search by name or email..."
+            placeholder={t("Search by name or email...")}
             value={filters.search}
             onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value, page: 1 }))}
             className="pl-9"
@@ -152,35 +154,35 @@ export function UserManagement() {
           onChange={(e) => setFilters((f) => ({ ...f, role: e.target.value, page: 1 }))}
           className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
         >
-          <option value="">All roles</option>
-          <option value="admin">Admin</option>
-          <option value="organizer">Organizer</option>
-          <option value="attendee">Attendee</option>
+          <option value="">{t("All roles")}</option>
+          <option value="admin">{t("Admin")}</option>
+          <option value="organizer">{t("Organizer")}</option>
+          <option value="attendee">{t("Attendee")}</option>
         </select>
         <select
           value={filters.status}
           onChange={(e) => setFilters((f) => ({ ...f, status: e.target.value, page: 1 }))}
           className="rounded-lg border border-input bg-background px-3 py-2 text-sm"
         >
-          <option value="">All status</option>
-          <option value="active">Active</option>
-          <option value="suspended">Suspended</option>
+          <option value="">{t("All status")}</option>
+          <option value="active">{t("Active")}</option>
+          <option value="suspended">{t("Suspended")}</option>
         </select>
       </div>
 
-      {loading ? <Loading text="Loading users..." /> : !data || data.items.length === 0 ? (
-        <EmptyState title="No users found" description="Try adjusting your search or filters." />
+      {loading ? <Loading text={t("Loading users...")} /> : !data || data.items.length === 0 ? (
+        <EmptyState title={t("No users found")} description={t("Try adjusting your search or filters.")} />
       ) : (
         <div className="rounded-lg border border-border">
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Name</TableHead>
-                <TableHead>Email</TableHead>
-                <TableHead>Role</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Joined</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("Name")}</TableHead>
+                <TableHead>{t("Email")}</TableHead>
+                <TableHead>{t("Role")}</TableHead>
+                <TableHead>{t("Status")}</TableHead>
+                <TableHead>{t("Joined")}</TableHead>
+                <TableHead className="text-right">{t("Actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -194,30 +196,30 @@ export function UserManagement() {
                   <TableCell className="text-muted-foreground">{user.email}</TableCell>
                   <TableCell>
                     <Badge variant={user.roleName === "admin" ? "default" : user.roleName === "organizer" ? "secondary" : "outline"}>
-                      {user.roleName}
+                      {roleLabel(user.roleName)}
                     </Badge>
                   </TableCell>
                   <TableCell>
                     <Badge variant={user.suspended ? "destructive" : "secondary"}>
-                      {user.suspended ? "Suspended" : "Active"}
+                      {user.suspended ? t("Suspended") : t("Active")}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-muted-foreground text-sm">
-                    {new Date(user.createdAt).toLocaleDateString()}
+                    {formatDate(new Date(user.createdAt))}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-2">
                       {user.suspended ? (
                         <Button size="sm" variant="outline" onClick={() => handleActivate(user.id, user.profile?.firstName)}>
-                          Activate
+                          {t("Activate")}
                         </Button>
                       ) : (
                         <Button size="sm" variant="outline" className="text-destructive" onClick={() => handleSuspend(user.id, user.profile?.firstName)}>
-                          Suspend
+                          {t("Suspend")}
                         </Button>
                       )}
                       <Button size="sm" variant="ghost" asChild>
-                        <Link to={`/dashboard/admin/users/${user.id}`}>View</Link>
+                        <Link to={`/dashboard/admin/users/${user.id}`}>{t("View")}</Link>
                       </Button>
                     </div>
                   </TableCell>
@@ -229,16 +231,16 @@ export function UserManagement() {
           {data.totalPages > 1 && (
             <div className="flex items-center justify-between px-4 py-3 border-t border-border">
               <p className="text-sm text-muted-foreground">
-                Page {data.page} of {data.totalPages} ({data.total} users)
+                {t("Page")} {data.page} {t("of")} {data.totalPages} ({data.total} {t("users)")}
               </p>
               <div className="flex gap-2">
                 <Button size="sm" variant="outline" disabled={data.page <= 1}
                   onClick={() => setFilters((f) => ({ ...f, page: f.page - 1 }))}>
-                  <ChevronLeft size={16} /> Previous
+                  <ChevronLeft size={16} /> {t("Previous")}
                 </Button>
                 <Button size="sm" variant="outline" disabled={data.page >= data.totalPages}
                   onClick={() => setFilters((f) => ({ ...f, page: f.page + 1 }))}>
-                  Next <ChevronRight size={16} />
+                  {t("Next")} <ChevronRight size={16} />
                 </Button>
               </div>
             </div>

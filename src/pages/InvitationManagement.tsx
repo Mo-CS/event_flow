@@ -1,3 +1,5 @@
+import { formatDate } from "../i18n/format"
+import { t } from "../i18n"
 import { useState, useEffect, useCallback } from "react"
 import { useParams, useNavigate } from "react-router-dom"
 import { ArrowLeft, Plus, Trash2, Copy, Check, Mail, UserCheck, UserX, Loader2, Search, Users } from "lucide-react"
@@ -56,7 +58,7 @@ export function InvitationManagement() {
       setLinks(l)
       setInvitedEmails(new Set(l.map((link) => link.email.toLowerCase())))
     } catch (e: any) {
-      toast.error(e?.message ?? "Failed to load")
+      toast.error(e?.message ?? t("Failed to load"))
     } finally {
       setLoading(false)
     }
@@ -66,7 +68,7 @@ export function InvitationManagement() {
       setUsers(all)
     } catch {
       setUsers([])
-      toast.error("Could not load the user list")
+      toast.error(t("Could not load the user list"))
     } finally {
       setUsersLoading(false)
     }
@@ -82,12 +84,12 @@ export function InvitationManagement() {
       const exists = await checkUserExists(email.trim().toLowerCase())
       setVerification(exists ? "exists" : "missing")
       if (exists) {
-        toast.success("Account found — ready to invite")
+        toast.success(t("Account found — ready to invite"))
       } else {
-        toast.info("No account found. Add the user to create the invitation.")
+        toast.info(t("No account found. Add the user to create the invitation."))
       }
     } catch {
-      toast.error("Could not verify email")
+      toast.error(t("Could not verify email"))
     } finally {
       setChecking(false)
     }
@@ -98,12 +100,12 @@ export function InvitationManagement() {
     setAdding(true)
     try {
       const link = await createLink(eventId, email.trim().toLowerCase())
-      toast.success(`Invitation created for ${link.email}`)
+      toast.success(t("Invitation created for {email}", { email: link.email }))
       setEmail("")
       setVerification("idle")
       fetch()
     } catch (err: any) {
-      toast.error(err.message ?? "Failed to create invitation")
+      toast.error(err.message ?? t("Failed to create invitation"))
     } finally {
       setAdding(false)
     }
@@ -117,7 +119,7 @@ export function InvitationManagement() {
   const handleCreateUserAndLink = async () => {
     if (!eventId) return
     if (!newUser.email.trim() || !newUser.firstName.trim() || !newUser.lastName.trim() || newUser.password.length < 6) {
-      toast.error("Fill all fields (password min 6 chars)")
+      toast.error(t("Fill all fields (password min 6 chars)"))
       return
     }
     setAdding(true)
@@ -130,13 +132,13 @@ export function InvitationManagement() {
         roleName: "attendee",
       })
       const link = await createLink(eventId, newUser.email.trim().toLowerCase())
-      toast.success(`User created and invited (${link.email})`)
+      toast.success(t("User created and invited ({email})", { email: link.email }))
       setNewUserOpen(false)
       setEmail("")
       setVerification("idle")
       fetch()
     } catch (err: any) {
-      toast.error(err.message ?? "Failed to create user")
+      toast.error(err.message ?? t("Failed to create user"))
     } finally {
       setAdding(false)
     }
@@ -172,14 +174,14 @@ export function InvitationManagement() {
     try {
       const created = await createLinksBulk(eventId, [...selectedUsers])
       if (created.length > 0) {
-        toast.success(`Created ${created.length} invitation link(s)`)
+        toast.success(t("Created {count} invitation link(s)", { count: created.length }))
       } else {
-        toast.info("All selected users already have links")
+        toast.info(t("All selected users already have links"))
       }
       setSelectedUsers(new Set())
       fetch()
     } catch (err: any) {
-      toast.error(err.message ?? "Failed to create invitations")
+      toast.error(err.message ?? t("Failed to create invitations"))
     } finally {
       setBulkGenerating(false)
     }
@@ -188,10 +190,10 @@ export function InvitationManagement() {
   const handleDelete = async (id: string) => {
     try {
       await deleteLink(id)
-      toast.success("Invitation link removed")
+      toast.success(t("Invitation link removed"))
       fetch()
     } catch {
-      toast.error("Failed to remove invitation")
+      toast.error(t("Failed to remove invitation"))
     }
   }
 
@@ -200,36 +202,36 @@ export function InvitationManagement() {
     try {
       await navigator.clipboard.writeText(url)
       setCopiedId(link.id)
-      toast.success("Link copied!")
+      toast.success(t("Link copied!"))
       setTimeout(() => setCopiedId(null), 2000)
     } catch {
-      toast.error("Failed to copy")
+      toast.error(t("Failed to copy"))
     }
   }
 
-  if (loading) return <Loading text="Loading invitations..." />
+  if (loading) return <Loading text={t("Loading invitations...")} />
 
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard/events")} className="gap-2">
-        <ArrowLeft size={16} /> Back to Events
+        <ArrowLeft size={16} /> {t("Back to Events")}
       </Button>
 
       <div className="flex items-center justify-between">
-        <h1 className="text-2xl font-bold">Invitations: {eventTitle}</h1>
-        <Badge variant="secondary">{links.length} link{links.length !== 1 ? "s" : ""}</Badge>
+        <h1 className="text-2xl font-bold">{t("Invitations:")} {eventTitle}</h1>
+        <Badge variant="secondary">{links.length} {t("link")}{links.length !== 1 ? "s" : ""}</Badge>
       </div>
 
       {/* Single invite with verification */}
       <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-        <h2 className="font-semibold">Invite One Person</h2>
+        <h2 className="font-semibold">{t("Invite One Person")}</h2>
         <p className="text-sm text-muted-foreground">
-          First check the email, then generate a unique one-time link. Only confirmed accounts are invitable.
+          {t("First check the email, then generate a unique one-time link. Only confirmed accounts are invitable.")}
         </p>
         <div className="flex gap-2">
           <Input
             type="email"
-            placeholder="Enter email address..."
+            placeholder={t("Enter email address...")}
             value={email}
             onChange={(e) => { setEmail(e.target.value); setVerification("idle") }}
             onKeyDown={(e) => e.key === "Enter" && handleVerify()}
@@ -237,24 +239,24 @@ export function InvitationManagement() {
           />
           <Button variant="outline" onClick={handleVerify} disabled={checking || !email.trim()} className="gap-2">
             {checking ? <Loader2 size={15} className="animate-spin" /> : verification === "missing" ? <UserX size={15} /> : <UserCheck size={15} />}
-            {checking ? "Checking..." : "Check"}
+            {checking ? t("Checking...") : t("Check")}
           </Button>
         </div>
 
         {verification === "exists" && (
           <div className="flex items-center gap-2 text-sm text-green-600 dark:text-green-400">
-            <UserCheck size={16} /> Account exists.
+            <UserCheck size={16} /> {t("Account exists.")}
             <Button size="sm" onClick={handleAdd} disabled={adding} className="gap-1.5">
-              <Plus size={14} /> {adding ? "Creating..." : "Create Invitation"}
+              <Plus size={14} /> {adding ? t("Creating...") : t("Create Invitation")}
             </Button>
           </div>
         )}
 
         {verification === "missing" && (
           <div className="flex items-center gap-2 text-sm text-amber-600 dark:text-amber-400">
-            <UserX size={16} /> No account found.
+            <UserX size={16} /> {t("No account found.")}
             <Button size="sm" variant="outline" onClick={openAddUser} className="gap-1.5">
-              <UserCheck size={14} /> Add User & Invite
+              <UserCheck size={14} /> {t("Add User & Invite")}
             </Button>
           </div>
         )}
@@ -263,11 +265,11 @@ export function InvitationManagement() {
       {/* Invite from user list */}
       <div className="rounded-xl border border-border bg-card p-6 space-y-4">
         <div className="flex items-center justify-between">
-          <h2 className="font-semibold">Invite Users</h2>
-          <Badge variant="secondary">{availableUsers.length} available</Badge>
+          <h2 className="font-semibold">{t("Invite Users")}</h2>
+          <Badge variant="secondary">{availableUsers.length} {t("available")}</Badge>
         </div>
         <p className="text-sm text-muted-foreground">
-          Select the users you want to invite to this private event. Users who already have a link are shown at the bottom as already invited.
+          {t("Select the users you want to invite to this private event. Users who already have a link are shown at the bottom as already invited.")}
         </p>
 
         <div className="flex gap-2">
@@ -276,17 +278,17 @@ export function InvitationManagement() {
             <Input
               value={userSearch}
               onChange={(e) => setUserSearch(e.target.value)}
-              placeholder="Search by name or email..."
+              placeholder={t("Search by name or email...")}
               className="pl-9"
             />
           </div>
-          <Button variant="outline" onClick={() => setUserSearch("")} disabled={!userSearch}>Clear</Button>
+          <Button variant="outline" onClick={() => setUserSearch("")} disabled={!userSearch}>{t("Clear")}</Button>
         </div>
 
         {usersLoading ? (
-          <div className="py-6 text-center text-sm text-muted-foreground">Loading users...</div>
+          <div className="py-6 text-center text-sm text-muted-foreground">{t("Loading users...")}</div>
         ) : users.length === 0 ? (
-          <EmptyState title="No users found" description="Create attendee accounts first, then invite them here." />
+          <EmptyState title={t("No users found")} description={t("Create attendee accounts first, then invite them here.")} />
         ) : (
           <div className="space-y-3">
             <div className="flex items-center gap-2 border-b border-border pb-2">
@@ -294,12 +296,12 @@ export function InvitationManagement() {
                 id="select-all-users"
                 checked={filteredUsers.length > 0 && selectedUsers.size === filteredUsers.length}
                 onCheckedChange={(c) => toggleAllUsers(!!c)}
-                label={<span className="text-sm font-medium">Select all {filteredUsers.length} user(s)</span>}
+                label={<span className="text-sm font-medium">{t("Select all")} {filteredUsers.length} {t("user(s)")}</span>}
               />
             </div>
             <div className="max-h-80 overflow-y-auto space-y-1.5 border border-border rounded-lg p-2">
               {filteredUsers.length === 0 ? (
-                <p className="text-sm text-muted-foreground text-center py-6">No users match your search</p>
+                <p className="text-sm text-muted-foreground text-center py-6">{t("No users match your search")}</p>
               ) : (
                 filteredUsers.map((u) => (
                   <div key={u.id} className="flex items-center gap-3 rounded-lg border border-border px-3 py-2">
@@ -322,21 +324,21 @@ export function InvitationManagement() {
             <Button onClick={handleGenerateFromList} disabled={bulkGenerating || selectedUsers.size === 0} className="gap-2">
               <Loader2 size={15} className={bulkGenerating ? "animate-spin" : "hidden"} />
               <Users size={15} className={bulkGenerating ? "hidden" : ""} />
-              Generate {selectedUsers.size > 0 ? `(${selectedUsers.size})` : ""} Invitation Link{selectedUsers.size !== 1 ? "s" : ""}
+              {t("Generate")} {selectedUsers.size > 0 ? `(${selectedUsers.size})` : ""} {t("Invitation Link")}{selectedUsers.size !== 1 ? "s" : ""}
             </Button>
           </div>
         )}
 
         {invitedEmails.size > 0 && (
           <div className="space-y-1.5">
-            <p className="text-xs font-medium text-muted-foreground">Already invited ({invitedEmails.size})</p>
+            <p className="text-xs font-medium text-muted-foreground">{t("Already invited (")}{invitedEmails.size})</p>
             <div className="max-h-32 overflow-y-auto space-y-1">
               {users.filter((u) => invitedEmails.has(u.email.toLowerCase())).map((u) => (
                 <div key={u.id} className="flex items-center gap-2 rounded-lg bg-muted/40 px-3 py-1.5 text-sm">
                   <Mail size={13} className="text-muted-foreground" />
                   <span className="font-medium">{u.firstName} {u.lastName}</span>
                   <span className="text-muted-foreground text-xs">{u.email}</span>
-                  <Badge variant="secondary" className="ml-auto">invited</Badge>
+                  <Badge variant="secondary" className="ml-auto">{t("invited")}</Badge>
                 </div>
               ))}
             </div>
@@ -346,17 +348,17 @@ export function InvitationManagement() {
 
       {/* Existing links */}
       {links.length === 0 ? (
-        <EmptyState title="No invitation links yet" description="Use the flow above to invite people." />
+        <EmptyState title={t("No invitation links yet")} description={t("Use the flow above to invite people.")} />
       ) : (
         <div className="rounded-lg border border-border">
-          <div className="px-4 py-3 border-b border-border bg-muted/20 font-semibold">Existing Links</div>
+          <div className="px-4 py-3 border-b border-border bg-muted/20 font-semibold">{t("Existing Links")}</div>
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead>Email</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Created</TableHead>
-                <TableHead className="text-right">Actions</TableHead>
+                <TableHead>{t("Email")}</TableHead>
+                <TableHead>{t("Status")}</TableHead>
+                <TableHead>{t("Created")}</TableHead>
+                <TableHead className="text-right">{t("Actions")}</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -370,21 +372,21 @@ export function InvitationManagement() {
                   </TableCell>
                   <TableCell>
                     <Badge variant={link.used ? "outline" : "default"}>
-                      {link.used ? "Used" : "Active"}
+                      {link.used ? t("Used") : t("Active")}
                     </Badge>
                   </TableCell>
                   <TableCell className="text-sm text-muted-foreground">
-                    {new Date(link.createdAt).toLocaleDateString()}
+                    {formatDate(new Date(link.createdAt))}
                   </TableCell>
                   <TableCell className="text-right">
                     <div className="flex justify-end gap-1">
                       <Button size="sm" variant="ghost" onClick={() => handleCopy(link)}>
                         {copiedId === link.id ? <Check size={14} /> : <Copy size={14} />}
-                        {copiedId === link.id ? "Copied" : "Copy"}
+                        {copiedId === link.id ? t("Copied") : t("Copy")}
                       </Button>
                       {!link.used && (
                         <Button size="sm" variant="ghost" className="text-destructive" onClick={() => handleDelete(link.id)}>
-                          <Trash2 size={14} /> Remove
+                          <Trash2 size={14} /> {t("Remove")}
                         </Button>
                       )}
                     </div>
@@ -400,31 +402,31 @@ export function InvitationManagement() {
       {newUserOpen && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={() => setNewUserOpen(false)}>
           <div className="w-full max-w-md rounded-xl bg-card p-6 space-y-4" onClick={(e) => e.stopPropagation()}>
-            <h2 className="text-lg font-semibold">Add New User & Invite</h2>
-            <p className="text-sm text-muted-foreground">A new attendee account will be created, then the invitation link generated.</p>
+            <h2 className="text-lg font-semibold">{t("Add New User & Invite")}</h2>
+            <p className="text-sm text-muted-foreground">{t("A new attendee account will be created, then the invitation link generated.")}</p>
             <div className="space-y-3">
               <div>
-                <label className="block text-sm font-medium mb-1">Email</label>
+                <label className="block text-sm font-medium mb-1">{t("Email")}</label>
                 <Input value={newUser.email} onChange={(e) => setNewUser({ ...newUser, email: e.target.value })} type="email" />
               </div>
               <div className="grid grid-cols-2 gap-3">
                 <div>
-                  <label className="block text-sm font-medium mb-1">First name</label>
+                  <label className="block text-sm font-medium mb-1">{t("First name")}</label>
                   <Input value={newUser.firstName} onChange={(e) => setNewUser({ ...newUser, firstName: e.target.value })} />
                 </div>
                 <div>
-                  <label className="block text-sm font-medium mb-1">Last name</label>
+                  <label className="block text-sm font-medium mb-1">{t("Last name")}</label>
                   <Input value={newUser.lastName} onChange={(e) => setNewUser({ ...newUser, lastName: e.target.value })} />
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium mb-1">Temporary password</label>
-                <Input value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} type="password" placeholder="min 6 characters" />
+                <label className="block text-sm font-medium mb-1">{t("Temporary password")}</label>
+                <Input value={newUser.password} onChange={(e) => setNewUser({ ...newUser, password: e.target.value })} type="password" placeholder={t("min 6 characters")} />
               </div>
             </div>
             <div className="flex justify-end gap-2 pt-2">
-              <Button variant="outline" onClick={() => setNewUserOpen(false)}>Cancel</Button>
-              <Button onClick={handleCreateUserAndLink} disabled={adding}>{adding ? "Creating..." : "Create & Invite"}</Button>
+              <Button variant="outline" onClick={() => setNewUserOpen(false)}>{t("Cancel")}</Button>
+              <Button onClick={handleCreateUserAndLink} disabled={adding}>{adding ? t("Creating...") : "Create & Invite"}</Button>
             </div>
           </div>
         </div>

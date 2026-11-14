@@ -1,11 +1,13 @@
-import { Outlet } from "react-router-dom"
-import ChatWidget from "./components/chat/ChatWidget"
+import { RouterProvider } from "react-router-dom"
+import { router } from "./routes"
+import { useLanguage } from "./i18n"
 
-export default function App() {
-  return (
-    <>
-      <Outlet />
-      <ChatWidget />
-    </>
-  )
+/**
+ * Re-mounts the router when the language changes. This guarantees that every
+ * page (including components that only call the plain `t()` helper) re-renders
+ * with the new language immediately.
+ */
+export function App() {
+  const { language } = useLanguage()
+  return <RouterProvider key={language} router={router} />
 }

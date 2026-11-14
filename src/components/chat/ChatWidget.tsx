@@ -1,3 +1,4 @@
+import { t } from "../../i18n"
 import { useState, useEffect, useRef } from "react"
 import { MessageSquare, X, Trash2, Loader2 } from "lucide-react"
 import { cn } from "../../lib/utils"
@@ -46,10 +47,10 @@ export default function ChatWidget() {
             </div>
             <div>
               <h3 className="text-sm font-semibold text-card-foreground">
-                EventFlow Assistant
+                {t("EventFlow Assistant")}
               </h3>
               <p className="text-[10px] text-muted-foreground">
-                Ask about events, venues & more
+                {t("Ask about events, venues & more")}
               </p>
             </div>
           </div>
@@ -58,7 +59,7 @@ export default function ChatWidget() {
               <button
                 onClick={clearMessages}
                 className="w-7 h-7 rounded-lg flex items-center justify-center text-muted-foreground hover:text-destructive hover:bg-destructive/10 transition-colors"
-                title="Clear chat"
+                title={t("Clear chat")}
               >
                 <Trash2 className="w-3.5 h-3.5" />
               </button>
@@ -82,10 +83,10 @@ export default function ChatWidget() {
                 <MessageSquare className="w-6 h-6 text-primary" />
               </div>
               <p className="text-sm font-medium text-card-foreground mb-1">
-                Hi there!
+                {t("Hi there!")}
               </p>
               <p className="text-xs text-muted-foreground leading-relaxed">
-                I can help you discover events, check venues, explore categories, and more. What would you like to know?
+                {t("I can help you discover events, check venues, explore categories, and more. What would you like to know?")}
               </p>
             </div>
           )}
@@ -136,7 +137,7 @@ export default function ChatWidget() {
           "hover:scale-105 active:scale-95",
           isOpen && "rotate-90"
         )}
-        title="Chat with EventFlow Assistant"
+        title={t("Chat with EventFlow Assistant")}
       >
         {isOpen ? (
           <X className="w-5 h-5" />

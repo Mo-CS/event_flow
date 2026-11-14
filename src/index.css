@@ -2,6 +2,21 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* Arabic typography: system Arabic fonts keep the app readable without an
+   extra web-font request. Switching to English restores the default font. */
+html.lang-ar body {
+  font-family: "Segoe UI", Tahoma, "Noto Kufi Arabic", "Cairo", "Dubai", system-ui, sans-serif;
+  letter-spacing: 0;
+}
+
+html.lang-ar input,
+html.lang-ar textarea,
+html.lang-ar select,
+html.lang-ar button {
+  font-family: inherit;
+}
+
+
 :root {
   --background: 185 20% 96%;
   --foreground: 185 25% 10%;

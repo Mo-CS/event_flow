@@ -1,3 +1,4 @@
+import { t } from "../i18n"
 import { useState, useEffect } from "react"
 import { useParams, Link } from "react-router-dom"
 import { ArrowLeft, Star, Lock, CheckCircle2 } from "lucide-react"
@@ -54,22 +55,22 @@ export function EventEvaluation() {
           setAlreadySubmitted(submitted)
         }
       } catch (e: any) {
-        toast.error(e?.message ?? "Failed to load")
+        toast.error(e?.message ?? t("Failed to load"))
       } finally {
         setLoading(false)
       }
     })()
   }, [id, profile])
 
-  if (loading) return <Loading text="Loading evaluation..." />
+  if (loading) return <Loading text={t("Loading evaluation...")} />
 
   if (!evaluation) {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center space-y-4">
         <Star size={48} className="mx-auto text-muted-foreground/30" />
-        <h1 className="text-xl font-bold">No evaluation available</h1>
-        <p className="text-sm text-muted-foreground">The organizer hasn't created an evaluation for this event yet.</p>
-        <Link to={`/events/${id}`} className="inline-block"><Button variant="outline" className="gap-2"><ArrowLeft size={15} /> Back to event</Button></Link>
+        <h1 className="text-xl font-bold">{t("No evaluation available")}</h1>
+        <p className="text-sm text-muted-foreground">{t("The organizer hasn't created an evaluation for this event yet.")}</p>
+        <Link to={`/events/${id}`} className="inline-block"><Button variant="outline" className="gap-2"><ArrowLeft size={15} /> {t("Back to event")}</Button></Link>
       </div>
     )
   }
@@ -78,9 +79,9 @@ export function EventEvaluation() {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center space-y-4">
         <CheckCircle2 size={48} className="mx-auto text-green-500" />
-        <h1 className="text-xl font-bold">Thank you!</h1>
-        <p className="text-sm text-muted-foreground">Your evaluation for "{eventTitle}" has been recorded.</p>
-        <Link to={`/events/${id}`} className="inline-block"><Button variant="outline" className="gap-2"><ArrowLeft size={15} /> Back to event</Button></Link>
+        <h1 className="text-xl font-bold">{t("Thank you!")}</h1>
+        <p className="text-sm text-muted-foreground">{t("Your evaluation for \"")}{eventTitle}{t("\" has been recorded.")}</p>
+        <Link to={`/events/${id}`} className="inline-block"><Button variant="outline" className="gap-2"><ArrowLeft size={15} /> {t("Back to event")}</Button></Link>
       </div>
     )
   }
@@ -89,9 +90,9 @@ export function EventEvaluation() {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center space-y-4">
         <Lock size={48} className="mx-auto text-amber-500/40" />
-        <h1 className="text-xl font-bold">Evaluation opens after the event</h1>
-        <p className="text-sm text-muted-foreground">You'll be able to rate "{eventTitle}" once it ends.</p>
-        <Link to={`/events/${id}`} className="inline-block"><Button variant="outline" className="gap-2"><ArrowLeft size={15} /> Back to event</Button></Link>
+        <h1 className="text-xl font-bold">{t("Evaluation opens after the event")}</h1>
+        <p className="text-sm text-muted-foreground">{t("You'll be able to rate \"")}{eventTitle}{t("\" once it ends.")}</p>
+        <Link to={`/events/${id}`} className="inline-block"><Button variant="outline" className="gap-2"><ArrowLeft size={15} /> {t("Back to event")}</Button></Link>
       </div>
     )
   }
@@ -100,23 +101,23 @@ export function EventEvaluation() {
     return (
       <div className="max-w-2xl mx-auto px-4 py-16 text-center space-y-4">
         <Lock size={48} className="mx-auto text-muted-foreground/30" />
-        <h1 className="text-xl font-bold">Not eligible</h1>
-        <p className="text-sm text-muted-foreground">Only registered attendees with confirmed attendance can evaluate this event.</p>
-        <Link to={`/events/${id}`} className="inline-block"><Button variant="outline" className="gap-2"><ArrowLeft size={15} /> Back to event</Button></Link>
+        <h1 className="text-xl font-bold">{t("Not eligible")}</h1>
+        <p className="text-sm text-muted-foreground">{t("Only registered attendees with confirmed attendance can evaluate this event.")}</p>
+        <Link to={`/events/${id}`} className="inline-block"><Button variant="outline" className="gap-2"><ArrowLeft size={15} /> {t("Back to event")}</Button></Link>
       </div>
     )
   }
 
   const handleSubmit = async () => {
     if (!evaluation || !profile) return
-    if (rating === 0) { toast.error("Please provide a rating"); return }
+    if (rating === 0) { toast.error(t("Please provide a rating")); return }
     setSubmitting(true)
     try {
       await submitEvaluation(evaluation.id, profile.id, { answers, rating, isPublic })
       setDone(true)
-      toast.success("Evaluation submitted")
+      toast.success(t("Evaluation submitted"))
     } catch (err: any) {
-      toast.error(err.message ?? "Failed to submit")
+      toast.error(err.message ?? t("Failed to submit"))
     } finally {
       setSubmitting(false)
     }
@@ -125,7 +126,7 @@ export function EventEvaluation() {
   return (
     <div className="max-w-2xl mx-auto px-4 py-12 space-y-6">
       <Link to={`/events/${id}`} className="inline-flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground">
-        <ArrowLeft size={15} /> Back to event
+        <ArrowLeft size={15} /> {t("Back to event")}
       </Link>
       <div className="text-center space-y-2">
         <h1 className="text-2xl font-bold">{evaluation.title}</h1>
@@ -135,7 +136,7 @@ export function EventEvaluation() {
       <Card>
         <CardContent className="p-6 space-y-6">
           <div>
-            <p className="font-medium mb-2">Overall rating</p>
+            <p className="font-medium mb-2">{t("Overall rating")}</p>
             {evaluation.ratingType === "stars"
               ? <StarRating value={rating} onChange={setRating} />
               : <NumericRating value={rating} onChange={setRating} />}
@@ -166,7 +167,7 @@ export function EventEvaluation() {
                   value={answers[q.id] ?? ""}
                   onChange={(e) => setAnswers((a) => ({ ...a, [q.id]: e.target.value }))}
                   rows={3}
-                  placeholder="Your answer..."
+                  placeholder={t("Your answer...")}
                   className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm focus:outline-none focus:ring-2 focus:ring-ring"
                 />
               )}
@@ -175,11 +176,11 @@ export function EventEvaluation() {
 
           <div className="flex items-center justify-between rounded-lg border border-border p-4">
             <div>
-              <p className="font-medium">Share publicly</p>
+              <p className="font-medium">{t("Share publicly")}</p>
               <p className="text-sm text-muted-foreground">
                 {evaluation.privacy === "public"
-                  ? "Show your name with this response. Anonymous keeps your identity hidden."
-                  : "This evaluation is secret — responses stay anonymous by default."}
+                  ? t("Show your name with this response. Anonymous keeps your identity hidden.")
+                  : t("This evaluation is secret — responses stay anonymous by default.")}
               </p>
             </div>
             {evaluation.privacy === "public" && (
@@ -197,12 +198,12 @@ export function EventEvaluation() {
 
           <div className="flex justify-end">
             <Button onClick={handleSubmit} disabled={submitting}>
-              {submitting ? "Submitting..." : "Submit Evaluation"}
+              {submitting ? t("Submitting...") : t("Submit Evaluation")}
             </Button>
           </div>
         </CardContent>
       </Card>
-      {role === "attendee" && <Badge variant="outline" className="text-xs">Registered attendee — {eligible ? "eligible" : ""}</Badge>}
+      {role === "attendee" && <Badge variant="outline" className="text-xs">{t("Registered attendee —")} {eligible ? "eligible" : ""}</Badge>}
     </div>
   )
 }

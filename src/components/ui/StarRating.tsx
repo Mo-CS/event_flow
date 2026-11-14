@@ -1,3 +1,4 @@
+import { t } from "../../i18n"
 import { useState, useRef, useCallback } from "react"
 import { Star } from "lucide-react"
 import { cn } from "../../lib/utils"
@@ -55,7 +56,7 @@ export function StarRating({ value, onChange, halfSteps = true, className }: Sta
       onPointerUp={handlePointerUp}
       onPointerLeave={() => setDragging(false)}
       role="slider"
-      aria-label="Rating"
+      aria-label={t("Rating")}
       aria-valuemin={0}
       aria-valuemax={max}
       aria-valuenow={value}
@@ -121,7 +122,7 @@ export function NumericRating({ value, onChange, max = 10, className }: NumericR
       onPointerMove={(e) => dragging && onChange(computeValue(e.clientX))}
       onPointerUp={() => setDragging(false)}
       role="slider"
-      aria-label="Rating"
+      aria-label={t("Rating")}
       aria-valuemin={1}
       aria-valuemax={max}
       aria-valuenow={value}

@@ -1,3 +1,5 @@
+import { t } from "../i18n"
+import { formatDateTime } from "../i18n/format"
 import { supabase } from "../lib/supabase"
 import type { Event } from "../types"
 
@@ -165,7 +167,7 @@ export async function getRegistrationTrends() {
 
   const byMonth: Record<string, number> = {}
   for (const r of data) {
-    const m = new Date(r.registered_at).toLocaleString("en-US", { month: "short" })
+    const m = formatDateTime(new Date(r.registered_at), { month: "short" })
     byMonth[m] = (byMonth[m] || 0) + 1
   }
 
@@ -197,10 +199,10 @@ function mapEvent(e: Record<string, any>): Event {
 function formatRelativeTime(dateStr: string): string {
   const diff = Date.now() - new Date(dateStr).getTime()
   const mins = Math.floor(diff / 60000)
-  if (mins < 1) return "just now"
-  if (mins < 60) return `${mins} minute${mins > 1 ? "s" : ""} ago`
+  if (mins < 1) return t("just now")
+  if (mins < 60) return t("{count} minutes ago", { count: mins })
   const hours = Math.floor(mins / 60)
-  if (hours < 24) return `${hours} hour${hours > 1 ? "s" : ""} ago`
+  if (hours < 24) return t("{count} hours ago", { count: hours })
   const days = Math.floor(hours / 24)
-  return `${days} day${days > 1 ? "s" : ""} ago`
+  return t("{count} days ago", { count: days })
 }

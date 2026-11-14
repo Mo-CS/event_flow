@@ -1,3 +1,5 @@
+import { formatDate } from "../i18n/format"
+import { t } from "../i18n"
 import { useState, useEffect } from "react"
 import { Link } from "react-router-dom"
 import { Calendar, MapPin, Clock, Search, Lock, Globe } from "lucide-react"
@@ -50,7 +52,7 @@ export function Events() {
       return dateSort === "asc" ? d : -d
     })
 
-  if (loading) return <Loading text="Loading events..." />
+  if (loading) return <Loading text={t("Loading events...")} />
 
   return (
     <div className="relative max-w-7xl mx-auto px-4 py-12">
@@ -63,31 +65,31 @@ export function Events() {
         <div className="flex items-center justify-between mb-8">
           <h1 className="text-3xl font-bold">
             <span className="bg-gradient-to-r from-[hsl(185,85%,38%)] via-[hsl(165,80%,40%)] to-[hsl(35,92%,52%)] bg-clip-text text-transparent">
-              Events
+              {t("Events")}
             </span>
           </h1>
-          <Badge variant="secondary" className="text-sm">{filtered.length} event{filtered.length !== 1 ? "s" : ""}</Badge>
+          <Badge variant="secondary" className="text-sm">{filtered.length} {t("event")}{filtered.length !== 1 ? "s" : ""}</Badge>
         </div>
 
         <div className="flex flex-wrap gap-3 mb-8">
           <div className="relative flex-1 min-w-[200px] max-w-sm">
             <Search size={16} className="absolute left-3 top-1/2 -translate-y-1/2 text-muted-foreground" />
-            <Input placeholder="Search events..." value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
+            <Input placeholder={t("Search events...")} value={search} onChange={(e) => setSearch(e.target.value)} className="pl-9" />
           </div>
           <select value={categoryFilter} onChange={(e) => setCategoryFilter(e.target.value)}
             className="rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-            <option value="">All categories</option>
+            <option value="">{t("All categories")}</option>
             {categories.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
           </select>
           <select value={dateSort} onChange={(e) => setDateSort(e.target.value as "asc" | "desc")}
             className="rounded-lg border border-input bg-background px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-ring">
-            <option value="asc">Upcoming first</option>
-            <option value="desc">Latest first</option>
+            <option value="asc">{t("Upcoming first")}</option>
+            <option value="desc">{t("Latest first")}</option>
           </select>
         </div>
 
         {filtered.length === 0 ? (
-          <EmptyState title="No events found" description={search || categoryFilter ? "Try adjusting your search or filters." : "No events available yet."} />
+          <EmptyState title={t("No events found")} description={search || categoryFilter ? t("Try adjusting your search or filters.") : t("No events available yet.")} />
         ) : (
           <div className="grid md:grid-cols-2 lg:grid-cols-3 gap-6">
             {filtered.map((event, i) => {
@@ -110,11 +112,11 @@ export function Events() {
                       <div className="absolute top-3 right-3 flex gap-1.5">
                         <span className={`flex items-center gap-1 px-2 py-1 rounded-full text-[10px] font-medium backdrop-blur-sm border ${event.visibility === "private" ? "bg-amber-500/20 text-amber-600 dark:text-amber-400 border-amber-500/20" : "bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/20"}`}>
                           {event.visibility === "private" ? <Lock size={10} /> : <Globe size={10} />}
-                          {event.visibility === "private" ? "Private" : "Public"}
+                          {event.visibility === "private" ? t("Private") : t("Public")}
                         </span>
                         {event.status === "draft" && (
                           <span className="px-2 py-1 rounded-full bg-amber-500/20 text-amber-600 dark:text-amber-400 text-[10px] font-medium backdrop-blur-sm border border-amber-500/20">
-                            Draft
+                            {t("Draft")}
                           </span>
                         )}
                       </div>
@@ -123,9 +125,9 @@ export function Events() {
                       <h3 className="font-semibold text-lg group-hover:text-primary transition-colors">{event.title}</h3>
                       <p className="text-sm text-muted-foreground mt-2 line-clamp-2 leading-relaxed">{event.description}</p>
                       <div className="flex items-center gap-4 mt-4 pt-4 border-t border-border text-xs text-muted-foreground">
-                        <span className="flex items-center gap-1"><Calendar size={14} />{new Date(event.startDate).toLocaleDateString()}</span>
-                        <span className="flex items-center gap-1"><MapPin size={14} />{venue?.name ?? "Unknown venue"}</span>
-                        <span className="flex items-center gap-1"><Clock size={14} />{event.capacity} spots</span>
+                        <span className="flex items-center gap-1"><Calendar size={14} />{formatDate(new Date(event.startDate))}</span>
+                        <span className="flex items-center gap-1"><MapPin size={14} />{venue?.name ?? t("Unknown venue")}</span>
+                        <span className="flex items-center gap-1"><Clock size={14} />{event.capacity} {t("spots")}</span>
                       </div>
                     </div>
                   </div>

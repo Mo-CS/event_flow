@@ -1,3 +1,5 @@
+import { formatDate } from "../i18n/format"
+import { t } from "../i18n"
 import { supabase } from "../lib/supabase"
 import type { Notification, NotificationType } from "../types"
 
@@ -69,7 +71,7 @@ export async function sendEventReminder(eventId: string): Promise<number> {
     .select("title, start_date")
     .eq("id", eventId)
     .single()
-  if (!event) throw new Error("Event not found")
+  if (!event) throw new Error(t("Event not found"))
 
   const { data: regs } = await supabase
     .from("registrations")
@@ -89,7 +91,7 @@ export async function sendEventReminder(eventId: string): Promise<number> {
   const notifications = profs.map((p) => ({
     user_id: p.user_id,
     type: "event_reminder" as NotificationType,
-    message: `Reminder: "${event.title}" starts ${new Date(event.start_date).toLocaleDateString()}!`,
+    message: `Reminder: "${event.title}" starts ${formatDate(new Date(event.start_date))}!`,
   }))
 
   const { error } = await supabase.from("notifications").insert(notifications)
