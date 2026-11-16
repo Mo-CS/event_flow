@@ -22,6 +22,10 @@ function parseAuthResult(result: any): AuthResult {
       createdAt: result.user.created_at,
       updatedAt: result.user.updated_at,
       suspended: result.user.suspended ?? undefined,
+      mustChangePassword: result.user.must_change_password ?? false,
+      deletedAt: result.user.deleted_at ?? undefined,
+      scheduledDeletionAt: result.user.scheduled_deletion_at ?? undefined,
+      deletionReason: result.user.deletion_reason ?? undefined,
     },
     profile: {
       id: result.profile.id,
@@ -260,7 +264,9 @@ export async function login(email: string, password: string): Promise<AuthResult
       p_password: password,
     })
     if (isMissingFunction(error)) return legacyLogin(email, password)
-    if (error || !data || data.error) throw new Error("Invalid email or password")
+    if (error || !data || data.error) {
+      throw new Error(data?.error ?? error?.message ?? "Invalid email or password")
+    }
     const result = parseAuthResult(data)
     logAction(result.user.id, "login", "user", result.user.id, "Logged in").catch(() => {})
     return result

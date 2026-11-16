@@ -43,8 +43,8 @@ flowchart TB
     GUARDS --> CONTEXTS
     PAGES --> ServiceLayer
     CONTEXTS --> ServiceLayer
-    CHAT_UI --> EF
-    CHAT_UI -.fallback.-> LMS
+    CHAT_UI -->|"POST /lmstudio/v1/chat/completions (وهو المستخدم فعلياً)"| LMS
+    CHAT_UI -.غير مستخدم في الواجهة الحالية.-> EF
     QR --> CAM
 
     AUTH --> UTIL

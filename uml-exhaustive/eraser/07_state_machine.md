@@ -10,12 +10,12 @@
 ## 2. الوصف الكامل للآلات الست
 
 ### A — Registration
-- [*] → pending (لحظي أثناء الطلب)
-- pending → confirmed: سعة متاحة (إدراج مباشر + توليد تذكرة)
-- pending → waitlisted: capacity full
+- [*] → confirmed: سعة متاحة (إدراج مباشر + توليد تذكرة)
+- [*] → waitlisted: capacity full
 - waitlisted → confirmed: **ترقية تلقائية** عبر trigger عند إلغاء مؤكد (أقدم بالترتيب registered_at)
 - confirmed/waitlisted → cancelled: إلغاء المستخدم أو المنظم
 - cancelled → [*]
+- ملاحظة دقيقة: **لا توجد حالة pending إطلاقًا** — `schema.sql` لا يعرفها، والتسجيل يُدرج `confirmed` أو `waitlisted` مباشرة فقط.
 
 ### B — Ticket
 - [*] → valid: تصدر عند confirmed فقط
@@ -49,17 +49,14 @@ title State Machines for Critical Domains - flat per aggregate
 
 Group Registration lifecycle [color: lightblue] {
   RegStart [shape: oval, color: black]
-  Pending [shape: round]
   Confirmed [shape: round, color: green]
   Waitlisted [shape: round, color: orange]
   Cancelled [shape: round, color: red]
   RegEnd [shape: oval, color: black]
 
-  RegStart > Pending
-  Pending > seats free > Confirmed
-  Pending > capacity full > Waitlisted
+  RegStart > seats free > Confirmed
+  RegStart > capacity full > Waitlisted
   Waitlisted > auto promotion by trigger > Confirmed
-  Pending > cancel > Cancelled
   Waitlisted > cancel > Cancelled
   Confirmed > cancel > Cancelled
   Cancelled > RegEnd

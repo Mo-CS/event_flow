@@ -14,7 +14,7 @@ interface AuthState {
 }
 
 interface AuthContextType extends AuthState {
-  login: (email: string, password: string) => Promise<void>
+  login: (email: string, password: string) => Promise<User>
   register: (email: string, password: string, firstName: string, lastName: string) => Promise<void>
   logout: () => void
   refreshProfile: () => Promise<void>
@@ -67,9 +67,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: true,
         isLoading: false,
       })
-    } catch {
+      return result.user
+    } catch (err) {
       setState((s) => ({ ...s, isLoading: false }))
-      throw new Error("Invalid email or password")
+      throw err instanceof Error ? err : new Error("Invalid email or password")
     }
   }, [])
 
@@ -86,9 +87,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
         isAuthenticated: true,
         isLoading: false,
       })
-    } catch {
+    } catch (err) {
       setState((s) => ({ ...s, isLoading: false }))
-      throw new Error("Registration failed")
+      throw err instanceof Error ? err : new Error("Registration failed")
     }
   }, [])
 

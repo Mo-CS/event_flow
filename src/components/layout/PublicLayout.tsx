@@ -1,6 +1,7 @@
 import { Outlet, Link, useLocation } from "react-router-dom"
 import { Toaster } from "../ui/toaster"
 import { useAuth } from "../../contexts/AuthContext"
+import { useSettings } from "../../contexts/SettingsContext"
 import { useTheme } from "../../contexts/ThemeContext"
 import { usePageTitle } from "../../lib/usePageTitle"
 import { Moon, Sun } from "lucide-react"
@@ -8,6 +9,7 @@ import ChatWidget from "../chat/ChatWidget"
 
 export function PublicLayout() {
   const { isAuthenticated, profile, role } = useAuth()
+  const { appName, logoUrl } = useSettings()
   const { theme, toggleTheme } = useTheme()
   const location = useLocation()
   usePageTitle(location.pathname)
@@ -26,9 +28,10 @@ export function PublicLayout() {
       <header className="border-b border-border bg-white/80 dark:bg-card/80 backdrop-blur-sm sticky top-0 z-50">
         <div className="absolute inset-x-0 bottom-0 h-px bg-gradient-to-r from-transparent via-teal-500/30 via-amber-500/30 via-emerald-500/30 to-transparent" />
         <div className="max-w-7xl mx-auto px-4 h-16 flex items-center justify-between relative">
-          <Link to="/" className="text-xl font-bold">
+          <Link to="/" className="flex items-center gap-2 text-xl font-bold">
+            {logoUrl && <img src={logoUrl} alt="" className="h-7 w-auto" />}
             <span className="bg-gradient-to-r from-[hsl(185,85%,38%)] via-[hsl(165,80%,40%)] to-[hsl(35,92%,52%)] bg-clip-text text-transparent">
-              EventFlow
+              {appName}
             </span>
           </Link>
           <nav className="hidden sm:flex items-center gap-6">
@@ -69,7 +72,7 @@ export function PublicLayout() {
       <footer className="border-t border-border py-8 mt-16 relative bg-gradient-to-r from-teal-500/[0.03] via-amber-500/[0.03] to-emerald-500/[0.03]">
         <div className="absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-teal-500/30 via-amber-500/30 via-emerald-500/30 to-transparent" />
         <div className="max-w-7xl mx-auto px-4 text-center text-sm text-muted-foreground">
-          &copy; {new Date().getFullYear()} EventFlow. All rights reserved.
+          &copy; {new Date().getFullYear()} {appName}. All rights reserved.
         </div>
       </footer>
       <Toaster />

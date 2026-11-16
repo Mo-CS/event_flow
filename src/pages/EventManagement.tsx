@@ -8,6 +8,7 @@ import { Loading } from "../components/ui/Loading"
 import { EmptyState } from "../components/ui/EmptyState"
 import { useAuth } from "../contexts/AuthContext"
 import { getEventsForUser, deleteEvent, duplicateEvent, publishEvent, archiveEvent, setDraft } from "../services/eventService"
+import { sendEventReminder } from "../services/notificationService"
 import { getVenues } from "../services/venueService"
 import type { Event, Venue } from "../types"
 
@@ -23,6 +24,7 @@ export function EventManagement() {
   const [events, setEvents] = useState<Event[]>([])
   const [venues, setVenues] = useState<Venue[]>([])
   const [loading, setLoading] = useState(true)
+  const [sendingReminder, setSendingReminder] = useState<string | null>(null)
 
   const fetch = useCallback(async () => {
     if (!profile || !user) return
@@ -66,6 +68,22 @@ export function EventManagement() {
     await setDraft(event.id)
     toast.success(`"${event.title}" moved to draft`)
     fetch()
+  }
+
+  const handleSendReminder = async (event: Event) => {
+    setSendingReminder(event.id)
+    try {
+      const count = await sendEventReminder(event.id)
+      if (count === 0) {
+        toast.info("No confirmed attendees to remind")
+      } else {
+        toast.success(`Reminder sent to ${count} attendee${count === 1 ? "" : "s"}`)
+      }
+    } catch (e: any) {
+      toast.error(e?.message ?? "Failed to send reminder")
+    } finally {
+      setSendingReminder(null)
+    }
   }
 
   if (loading) return <Loading text="Loading events..." />
@@ -119,6 +137,9 @@ export function EventManagement() {
                 )}
                 {event.status === "published" && (
                   <>
+                    <Button size="sm" variant="ghost" onClick={() => handleSendReminder(event)} disabled={sendingReminder === event.id}>
+                      <Send size={14} /> {sendingReminder === event.id ? "Sending..." : "Send Reminder"}
+                    </Button>
                     <Button size="sm" variant="ghost" onClick={() => handleArchive(event)}><Archive size={14} /> Archive</Button>
                     <Button size="sm" variant="ghost" onClick={() => handleDraft(event)}><RotateCcw size={14} /> Unpublish</Button>
                   </>

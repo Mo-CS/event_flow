@@ -12,17 +12,23 @@ import { Button } from "../components/ui/button"
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from "../components/ui/table"
 import { Badge } from "../components/ui/badge"
 import { Loading } from "../components/ui/Loading"
-import { getReportData, exportToCsv } from "../services/reportsService"
+import { getReportData, exportToCsv, type ReportModeFilter } from "../services/reportsService"
 
 const COLORS = ["#007bff", "#28a745", "#6f42c1", "#fd7e14", "#e83e8c", "#20c997", "#ffc107", "#dc3545", "#17a2b8", "#6c757d"]
 
 export function Reports() {
   const [data, setData] = useState<any>(null)
   const [loading, setLoading] = useState(true)
+  const [modeFilter, setModeFilter] = useState<ReportModeFilter>("all")
 
   useEffect(() => {
-    getReportData().then((d) => { setData(d); setLoading(false) })
-  }, [])
+    let active = true
+    setLoading(true)
+    getReportData(modeFilter)
+      .then((d) => { if (active) { setData(d); setLoading(false) } })
+      .catch(() => { if (active) setLoading(false) })
+    return () => { active = false }
+  }, [modeFilter])
 
   if (loading) return <Loading text="Loading reports..." />
   if (!data) return null
@@ -44,6 +50,9 @@ export function Reports() {
       "Event": c.name, Planned: c.planned, Actual: c.actual, Difference: c.difference,
     })), "costs")
     exportSection(data.registrationTrend.map((t: any) => ({ Month: t.month, Registrations: t.count })), "registration-trend")
+    exportSection(data.attendanceByMode.map((m: any) => ({
+      Mode: m.name, "Confirmed registrations": m.confirmed, Attended: m.attended,
+    })), "attendance-by-mode")
     exportSection(data.statusPie, "registrations-by-status")
     exportSection(data.attendanceRateByEvent.map((e: any) => ({
       "Event": e.name, Status: e.status ?? "published", Confirmed: e.confirmed, Cancelled: e.cancelled, Waitlisted: e.waitlisted, Attended: e.attended,
@@ -54,7 +63,13 @@ export function Reports() {
     <div className="space-y-6" id="reports-root">
       <div className="flex items-center justify-between no-print">
         <h1 className="text-2xl font-bold">Comprehensive Reports</h1>
-        <div className="flex gap-2">
+        <div className="flex items-center gap-2">
+          <select value={modeFilter} onChange={(e) => setModeFilter(e.target.value as ReportModeFilter)}
+            className="px-3 py-2 rounded-lg border border-input bg-background text-sm">
+            <option value="all">All attendance modes</option>
+            <option value="in_person">In person only</option>
+            <option value="online">Online only</option>
+          </select>
           <Button variant="outline" size="sm" className="gap-2" onClick={handlePrint}>
             <Printer size={15} /> Print
           </Button>
@@ -209,6 +224,33 @@ export function Reports() {
                 <Bar dataKey="attended" fill="#28a745" radius={[4, 4, 0, 0]} />
               </BarChart>
             </ResponsiveContainer>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardHeader><CardTitle className="text-base">Attendance by Mode</CardTitle></CardHeader>
+          <CardContent>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Mode</TableHead>
+                  <TableHead className="text-right">Confirmed</TableHead>
+                  <TableHead className="text-right">Attended</TableHead>
+                  <TableHead className="text-right">Rate</TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {data.attendanceByMode.map((m: any) => (
+                  <TableRow key={m.mode}>
+                    <TableCell className="font-medium">{m.name}</TableCell>
+                    <TableCell className="text-right">{m.confirmed}</TableCell>
+                    <TableCell className="text-right">{m.attended}</TableCell>
+                    <TableCell className="text-right">
+                      {m.confirmed > 0 ? Math.round((m.attended / m.confirmed) * 100) : 0}%
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
           </CardContent>
         </Card>
       </div>
@@ -382,6 +424,8 @@ export function Reports() {
                   <TableHead>Event</TableHead>
                   <TableHead>Status</TableHead>
                   <TableHead>Type</TableHead>
+                  <TableHead className="text-right">Online</TableHead>
+                  <TableHead className="text-right">In person</TableHead>
                   <TableHead className="text-right">Capacity</TableHead>
                   <TableHead className="text-right">Confirmed</TableHead>
                   <TableHead className="text-right">Cancelled</TableHead>
@@ -398,6 +442,8 @@ export function Reports() {
                     <TableCell>
                       <Badge variant="secondary">{data.events.find((ev: any) => ev.id === e.id)?.event_type ?? "in_person"}</Badge>
                     </TableCell>
+                    <TableCell className="text-right">{e.online ?? 0}</TableCell>
+                    <TableCell className="text-right">{e.inPerson ?? 0}</TableCell>
                     <TableCell className="text-right">{data.events.find((ev: any) => ev.id === e.id)?.capacity ?? "—"}</TableCell>
                     <TableCell className="text-right">{e.confirmed ?? e.registered}</TableCell>
                     <TableCell className="text-right">{e.cancelled ?? 0}</TableCell>

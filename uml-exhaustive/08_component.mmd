@@ -83,10 +83,10 @@ flowchart LR
     INFRA_SB -->|"subscribe"| BE_RT
     INFRA_SB -->|"upload/download"| BE_ST
 
-    CHAT -->|"fetch"| BE_EF
+    CHAT -->|"HTTP POST /lmstudio/v1/chat/completions (وهو المستخدم فعلياً)"| EXT_LM
+    CHAT -.غير مستخدم في الواجهة الحالية.-> BE_EF
     BE_EF -->|"service-role key"| BE_PG
     BE_EF -->|"HTTP POST"| EXT_OR
-    CHAT -.->|"fallback"| EXT_LM
     QRSCAN -.->|"إدخال"| EXT_CAM
     SVC_AUTH -.->|"قوالب البريد"| EXT_EMAIL
 

@@ -4,6 +4,9 @@
 > شاملة لجميع السيناريوهات (happy path، بدائل، فشل، حالات حافة)، مع قواميس بيانات،
 > شروح عربية، ومصفوفة تتبع كود، ومربط أمني (JWT-less custom sessions / RBAC / RLS / RPCs).
 >
+> **للشرح التعليمي التفصيلي** (ما هو كل مخطط ولماذا نستخدمه وأجزاؤه):
+> راجع [`DIAGRAMS_GUIDE.md`](./DIAGRAMS_GUIDE.md)
+>
 > **الأدوات المعتمدة (إلزامية):**
 > | المخطط | الأداة | الامتداد |
 > |---|---|---|
@@ -97,7 +100,7 @@
 ### 2.2 شرح عربي للمخطط
 
 - **الفاعلون:** `Visitor` (زائر غير مسجل) → يتفرع منه `Attendee` (حاضر مسجل) و`Organizer` (منظم)، ومن الأخير يتفرع `Admin` (مدير). هذا التعميم يمنح المخطط مرجعية RBAC مباشرة: كل حالة استخدام قابلة للوصول عبر الأدوار المتوارثة فقط.
-- **الأنظمة الخارجية:** `Supabase` (المصادقة والتخزين)، `OpenRouter AI` (محرك الـ LLM)، `Camera/QR` (فحص التذاكر)، و`Email Gateway` (توصيل روابط إعادة التعيين — محاكى في العرض).
+- **الأنظمة الخارجية:** `Supabase` (المصادقة والتخزين)، `LM Studio` (خادم النموذج المحلي — المسار الفعلي للمساعد)، `Camera/QR` (فحص التذاكر)، و`Email Gateway` (توصيل روابط إعادة التعيين — محاكى في العرض). (يوجد `OpenRouter` كمسار تصميمي بديل عبر Edge Function غير مستخدم في الواجهة الحالية).
 - **علاقات `<<include>>`:** مسارات فرعية إلزامية، مثل: التسجيل (UC10) يشمل دائمًا توليد تذكرة QR (UC12) عند التأكيد وإشعار الحاضر (UC17)؛ والفحص (UC25) يشمل التحقق من ملكية التذكرة وحالتها؛ والدخول (UC05) يشمل إنشاء جلسة الجهاز وتسجيل الحادثة.
 - **علاقات `<<extend>>` مع نقاط تمديد (Extension Points):** مسارات شرطية:
   - UC10 ↔ UC26: عند `private event + invite code`، مع التحقق من صحة الرمز وصدور الردود (مستخدم/مستخدم مسبقًا/لفعالية أخرى/بريد مختلف).
@@ -128,7 +131,7 @@
 | `EventOrganizer` | `event_organizers` | علاقة منظم↔فعالية | UNIQUE(event_id,user_id); `is_primary` |
 | `Session` | `sessions` | جلسة/قاعة داخل الفعالية | FK event_id |
 | `Speaker` | `speakers` | متحدث في جلسة | FK session_id |
-| `Registration` | `registrations` | تسجيل حاضر | status: pending/confirmed/cancelled/waitlisted |
+| `Registration` | `registrations` | تسجيل حاضر | status: confirmed/cancelled/waitlisted |
 | `Ticket` | `tickets` | تذكرة QR | FK registration_id UNIQUE; `unique_code` UK; status valid/used/invalid |
 | `Attendance` | `attendance` | سجل الحضور | FK ticket_id; check_in/check_out |
 | `InvitationLink` | `invitation_links` | رابط دعوة لبرنامج خاص | `code` UK; `used` |
@@ -156,7 +159,7 @@
 | `EventStatus` | `draft` \| `published` \| `archived` |
 | `EventVisibility` | `public` \| `private` |
 | `EventType` | `in_person` \| `online` |
-| `RegistrationStatus` | `pending` \| `confirmed` \| `cancelled` \| `waitlisted` |
+| `RegistrationStatus` | `confirmed` \| `cancelled` \| `waitlisted` |
 | `TicketStatus` | `valid` \| `used` \| `invalid` |
 | `ChatChannelType` | `event` \| `direct` |
 | `RatingType` | `stars` \| `emoji` \| `custom` |
@@ -227,12 +230,12 @@
 
 | المخطط | المشاركون | السيناريوهات المغطاة | المصدر |
 |---|---|---|---|
-| `04a_sequence_auth.mmd` | U, AuthContext, authService, RateLimiter, Legacy, DB (RPC/RLS), auditService | login (نجاح/فشل/حد/سلسلة معلّقة/Legacy)، register (بريد مستخدم/Legacy)، restoreSession (انتهاء/معلق)، password reset (ضدّ Enumeration، توكن منتهٍ/قاصر)، logout | `AuthContext.tsx`, `authService.ts`, `deviceSessionService.ts`, `schema.sql:195,337,388,448,667,697` |
+| `04a_sequence_auth.mmd` | U, AuthContext, authService, RateLimiter, DB (RPC/RLS), auditService | login (نجاح/فشل/حد/حساب معلّق/fallback SHA-256 عند PGRST202)، register (بريد مستخدم/fallback SHA-256)، restoreSession (جلسة منتهية/حساب معلّق)، password reset (رسالة موحّدة ضد التخمين، توكن منتهٍ/قاصر)، logout | `AuthContext.tsx`, `authService.ts`, `deviceSessionService.ts`, `schema.sql:195,337,388,448,667,697` |
 | `04b_sequence_registration.mmd` | U, UI, eventService, invitationService, ticketService, notificationService, DB | تسجيل عام (سعة متاحة/ممتلئة→waitlist)، فعالية خاصة + تحقق رمز الدعوة (6 حالات)، إلغاء + ترقية قائمة انتظار، إنشاء دعوة | `eventService.ts:236`, `invitationService.ts`, `ticketService.generateTicket` |
-| `04c_sequence_checkin.mmd` | O, Camera, UI, attendanceService, DB, auditService | فحص QR (نجاح/تذكرة غير موجودة/مستخدمة/تسجيل غير مؤكد)، دخول يدوي، خروج، حضور أونلاين تلقائي idempotent | `attendanceService.ts` (checkIn, checkOut, findTicketByCode, markAutoAttendance) |
+| `04c_sequence_checkin.mmd` | O (المنظم), Camera, UI, attendanceService, DB | فحص QR (نجاح/تذكرة غير موجودة/مستخدمة/تسجيل غير مؤكد)، دخول يدوي، خروج، حضور أونلاين تلقائي idempotent — بلا خطوة audit في checkIn | `attendanceService.ts` (checkIn, checkOut, findTicketByCode, markAutoAttendance) |
 | `04d_sequence_chat.mmd` | Organizer, Attendee, chatService, DB, Realtime | ضمان القناة العامة، قناة خاصة 1:1 فريدة، إرسال + بث Realtime، جلب السجل مع أسماء المرسلين، فشل RLS/انقطاع | `chatService.ts`, `schema.sql:55-82,816-817` |
 | `04e_sequence_evaluation.mmd` | Organizer, Attendee, UI, evaluationService, DB (RPC) | إنشاء استبيان، فحص hasSubmitted، إرسال عبر `submit_evaluation` (أخطاء: غير مؤكد/لا حضور/تكرار)، عرض نتائج secret/public | `evaluationService.ts`, `schema.sql:574-643` |
-| `04f_sequence_chatbot.mmd` | U, UI, useChat, Edge Function, OpenRouter, DB | رد مباشر، دورة Tool-Calling (حتى 5 تكرارات)، الأدوات الست، فشل (مفتاح مفقود/429 مع retry أسي/رسالة فارغة/LM Studio fallback)، إلغاء (Abort) | `supabase/functions/chatbot/index.ts`, `useChat.ts` |
+| `04f_sequence_chatbot.mmd` | U, UI, useChat, LM Studio (محلي), DB (REST) | رد مباشر، دورة Tool-Calling (حتى 5 تكرارات)، الأدوات الست المنفَّذة من المتصفح عبر REST مباشرة، فشل (LM Studio غير متصل/خطأ)، إلغاء (Abort) | `useChat.ts` (المسار الفعلي)؛ `supabase/functions/chatbot/index.ts` (تصميم بديل غير مستخدم) |
 
 ### 5.2 شرح عربي عام
 
@@ -246,8 +249,8 @@
 
 | المخطط | الغرض | النقاط |
 |---|---|---|
-| `05a_activity_registration.mmd` | آلة قرار التسجيل الكاملة | نشر/موعد/انتهاء، عام/خاص + 5 تحققات للرمز، تكرار، سعة، waitlist، تذكرة، إشعارات |
-| `05b_activity_checkin.mmd` | آلة قرار الدخول | كاميرا/يدوي، 3 أعطال للتذكرة + شرط confirmed، إعادة محاولة، خروج، وحضور أونلاين تلقائي |
+| `05a_activity_registration.mmd` | نشاط التسجيل الكامل (يبدأ بالنشاط ثم الشروط داخل مساره) | النشاط: التسجيل → تحقق النشر/الموعد/الانتهاء أثنائه، عام/خاص + 5 تحققات للرمز، تكرار، سعة، waitlist، تذكرة، إشعارات |
+| `05b_activity_checkin.mmd` | نشاط الدخول الكامل (يبدأ بالنشاط ثم الشروط داخل مساره) | النشاط: الدخول → كاميرا/يدوي، 3 أعطال للتذكرة + شرط confirmed أثناء الفحص، إعادة محاولة، خروج، وحضور أونلاين تلقائي |
 
 ---
 
@@ -257,7 +260,7 @@
 - **طبقة العرض:** صفحات + سياقات + حماية المسارات + واجهة المساعد + QR.
 - **طبقة الخدمات (Repository):** auth/domain/support/misc + أدوات (rateLimit, supabaseErrors).
 - **الواجهة الخلفية:** Postgres (30 جدول + RLS + RPCs)، Realtime، Storage، Edge Functions.
-- **أنظمة خارجية:** OpenRouter، البريد، الكاميرا، LM Studio (fallback للاستوديو).
+- **أنظمة خارجية:** LM Studio (المسار الفعلي للروبوت من المتصفح)، البريد، الكاميرا، OpenRouter (مسار تصميمي عبر Edge Function غير مستخدم).
 - **الاتصالات:** anon key + RLS من العميل، وservice-role key من الـ Edge Function فقط، وترقيم أمني للطبقات.
 
 ---
@@ -268,7 +271,7 @@
 
 | كائن النطاق | الحالات | الانتقالات الرئيسية | الشرط/المشغّل | التتبع للكود |
 |---|---|---|---|---|
-| `Registration` | pending, confirmed, cancelled, waitlisted | pending→confirmed، pending→waitlisted، waitlisted→confirmed، confirmed→cancelled، waitlisted→cancelled | إدراج مباشر (confirmed/waitlisted)؛ ترقية عبر trigger `notify_waitlist_promotion` | `eventService.registerForEvent`, `schema.sql:822` |
+| `Registration` | confirmed, cancelled, waitlisted | confirmed→cancelled، waitlisted→confirmed (ترقية)، waitlisted→cancelled | إدراج مباشر (confirmed/waitlisted)؛ ترقية عبر trigger `notify_waitlist_promotion` | `eventService.registerForEvent`, `schema.sql:822` |
 | `Ticket` | valid, used, invalid | valid→used (checkIn/auto-attendance)، valid→invalid (إبطال) | تحقق: تسجيل confirmed مسبقًا | `attendanceService.checkIn`, `ticketService` |
 | `Attendance` | NoAttendance, CheckedIn, CheckedOut | NoAttendance→CheckedIn، CheckedIn→CheckedOut | checkIn idempotent أونلاين | `attendanceService` |
 | `Event` | draft, published, archived | draft→published، published→draft (unpublish)، published→archived، archived→published | `updateEventStatus` | `eventService` |
@@ -280,7 +283,7 @@
 
 مخطط `stateDiagram-v2` بوحدات مجمّعة لكل كائن نطاق. ملاحظتان مهمتان موثقتان داخل المخطط:
 1) لا انتهاء صلاحية صريح للجلسة حاليًا (`last_active_at` يتحدث عبر `get_session_user` فقط) — قيد تصميم معروف يُغطى في القيود؛
-2) `pending` حالة محفوظة في قاعدة البيانات لكن تدفق التسجيل الفعلي يُدرج `confirmed` أو `waitlisted` مباشرة.
+2) `pending` غير موجود إطلاقًا في `schema.sql` — تدفق التسجيل الفعلي يُدرج `confirmed` أو `waitlisted` مباشرة فقط.
 
 ---
 
@@ -292,7 +295,7 @@
 |---|---|---|---|
 | `PresentationLayer` | مكوّن عرض | يعتمد على كل مكوّنات الخدمات | `src/pages` |
 | `AuthComponent` | مكوّن عرض | واجهة `login/register/restore/logout` + RBAC | `AuthContext.tsx`, `ProtectedRoute.tsx` |
-| `ChatComponent` | مكوّن عرض | واجهة إرسال/اشتراك + استدعاء Edge Function | `useChat.ts` |
+| `ChatComponent` | مكوّن عرض | واجهة إرسال/اشتراك + استدعاء LM Studio عبر `/lmstudio/v1/chat/completions` | `useChat.ts` |
 | `QRScanner` | مكوّن عرض | إدخال فيديو + فك ترميز QR | `QrScanner.tsx` |
 | `AuthServiceComponent` | مكوّن خدمة | RPC auth + rate limit | `authService.ts`, `deviceSessionService.ts` |
 | `EventManagementComponent` | مكوّن خدمة | CRUD الفعاليات + النشر/الأرشفة | `eventService.ts` |
@@ -305,15 +308,16 @@
 | `DataAccessComponent` | بنية تحتية | منفذ REST/RPC (SupabaseClient singleton) | `src/lib/supabase.ts` |
 | `RateLimitComponent` | بنية تحتية | 30/60 ثانية | `rateLimit.ts` |
 | `ErrorMapperComponent` | بنية تحتية | PGRST202/205 → رسائل عربية | `supabaseErrors.ts` |
-| `ChatbotFunction` | مكوّن خلفي | منفذ HTTP `/functions/v1/chatbot` + service-role key | `supabase/functions/chatbot/index.ts` |
+| `ChatbotFunction` | مكوّن خلفي (بديل تصميمي غير مستخدم في الواجهة الحالية) | منفذ HTTP `/functions/v1/chatbot` + service-role key | `supabase/functions/chatbot/index.ts` |
+| `LMStudioEndpoint` | نظام خارجي (محلي) | منفذ HTTP `/lmstudio/v1/chat/completions` — المسار الفعلي للروبوت | `useChat.ts` |
 | `TriggerComponents` | مكوّنات خلفي | waitlist_promotion / auto_assign_organizers | `schema.sql:822,851` |
 
 ### 9.2 شرح عربي
 
 المخطط يرسم فئات المكوّنات المستقلة واعتمادياتها الحقيقية (استيراد واستدعاء)، ويفصل منافذ الواجهات
-(ports) المميزة بـ `===`: منفذ REST/RPC، منفذ الاشتراك Realtime، منفذ Storage، منفذ HTTP للمساعد،
-ومنفذ LLM. يبيّن أن `ChatbotFunction` تتصل بقاعدة البيانات بـ service-role key (خادم فقط) بينما
-العميل عبر anon key + RLS.
+(ports) المميزة بـ `===`: منفذ REST/RPC، منفذ الاشتراك Realtime، منفذ Storage، ومنفذ HTTP للمساعد
+(الفعلي: LM Studio محلي؛ والـ`ChatbotFunction` تبقى مسارًا تصميميًا يتصل بقاعدة البيانات بـ service-role key
+خادمًا فقط، بينما العميل عبر anon key + RLS).
 
 ---
 
@@ -326,14 +330,14 @@
 | جهاز المستخدم (المتصفح) | Device | `EventFlow SPA` (حزمة Vite)، وصول الكاميرا | `package.json` |
 | استضافة الملفات الثابتة | Host/CDN | ملفات `dist` (index.html + assets) | build Vite |
 | Supabase Cloud | PaaS | PostgreSQL (schema.sql + RLS + RPCs + Triggers)، Edge Runtime (chatbot)، Realtime، Storage | `supabase/` |
-| OpenRouter | External Cloud | LLM API (`llama-3.2-3b-instruct:free`) | `chatbot/index.ts` |
-| LM Studio | Local Dev | خادم HTTP محلي (fallback نسخة الاستوديو) | `useChat.ts` |
+| LM Studio | Local Dev | خادم HTTP محلي `/lmstudio/v1/chat/completions` — المسار الفعلي للروبوت | `useChat.ts` |
+| OpenRouter | External Cloud (بديل تصميمي) | LLM API (`llama-3.2-3b-instruct:free`) عبر Edge Function غير مستخدم | `chatbot/index.ts` |
 | Email Gateway | External | تسليم روابط إعادة التعيين (محاكى) | `schema.sql:646` |
 
 ### 10.2 شرح عربي
 
 يوضح المخطط مسارات النقل: `HTTPS` لتحميل الـ SPA والاستدعاءات (REST/RPC/Storage/Edge)، و`WSS`
-لاشتراكات Realtime، واتصال LLM من الـ Edge Function فقط (لا يُكشف مفتاح OpenRouter للعميل أبدًا)،
+لاشتراكات Realtime، واتصال الروبوت الفعلي عبر `HTTP` محلي إلى LM Studio (مع أدوات REST مباشرة من المتصفح)،
 والكاميرا عبر إدخال فيديو محلي.
 
 ---

@@ -23,6 +23,8 @@ export function AttendanceManagement() {
   const { profile, role } = useAuth()
   const navigate = useNavigate()
   const [eventTitle, setEventTitle] = useState("")
+  const [isHybrid, setIsHybrid] = useState(false)
+  const [modeFilter, setModeFilter] = useState<"all" | "online" | "in_person">("all")
   const [registrations, setRegistrations] = useState<Registration[]>([])
   const [attendanceRecords, setAttendanceRecords] = useState<Map<string, Attendance>>(new Map())
   const [ticketMap, setTicketMap] = useState<Map<string, Ticket>>(new Map())
@@ -47,6 +49,7 @@ export function AttendanceManagement() {
       if (!event) { navigate("/dashboard/events"); return }
       if (event.organizerId !== profile?.id && role !== "admin") { navigate("/dashboard/events"); return }
       setEventTitle(event.title)
+      setIsHybrid(event.eventType === "hybrid")
       const regs = await getRegistrations(eventId)
       const confirmed = regs.filter((r) => r.status === "confirmed").sort((a, b) => new Date(b.registeredAt).getTime() - new Date(a.registeredAt).getTime())
       setRegistrations(confirmed)
@@ -83,7 +86,7 @@ export function AttendanceManagement() {
     const ticket = ticketMap.get(reg.id)
     if (!ticket) { toast.error("No ticket found for this registration"); return }
     try {
-      await checkIn(ticket.id)
+      await checkIn(ticket.id, { mode: reg.attendanceMode, verifiedBy: profile?.userId })
       toast.success(`${profileMap.get(reg.attendeeId)?.firstName ?? "Attendee"} checked in`)
       fetch()
     } catch (e: any) {
@@ -139,7 +142,7 @@ export function AttendanceManagement() {
         await checkOut(existingAtt.id)
         toast.success(`${pendingConfirm.profile?.firstName ?? "Attendee"} checked out`)
       } else {
-        await checkIn(ticket.id)
+        await checkIn(ticket.id, { mode: pendingConfirm.registration.attendanceMode, source: "qr_scan", verifiedBy: profile?.userId })
         toast.success(`${pendingConfirm.profile?.firstName ?? "Attendee"} checked in`)
       }
       setScanCode("")
@@ -163,15 +166,29 @@ export function AttendanceManagement() {
 
   if (loading) return <Loading text="Loading attendance..." />
 
+  const visibleRegistrations = modeFilter === "all"
+    ? registrations
+    : registrations.filter((r) => (r.attendanceMode ?? "in_person") === modeFilter)
+
   return (
     <div className="space-y-6">
       <Button variant="ghost" size="sm" onClick={() => navigate("/dashboard/events")} className="gap-2">
         <ArrowLeft size={16} /> Back to Events
       </Button>
 
-      <div className="flex items-center justify-between">
+      <div className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="text-2xl font-bold">Attendance: {eventTitle}</h1>
-        <Badge variant="secondary">{registrations.length} attendees</Badge>
+        <div className="flex items-center gap-2">
+          {isHybrid && (
+            <select value={modeFilter} onChange={(e) => setModeFilter(e.target.value as "all" | "online" | "in_person")}
+              className="px-3 py-2 rounded-lg border border-input bg-background text-sm">
+              <option value="all">All modes</option>
+              <option value="in_person">In person</option>
+              <option value="online">Online</option>
+            </select>
+          )}
+          <Badge variant="secondary">{visibleRegistrations.length} attendees</Badge>
+        </div>
       </div>
 
       <Card>
@@ -255,7 +272,7 @@ export function AttendanceManagement() {
         </DialogContent>
       </Dialog>
 
-      {registrations.length === 0 ? (
+      {visibleRegistrations.length === 0 ? (
         <EmptyState title="No confirmed registrations" description="Only confirmed registrations can check in." />
       ) : (
         <div className="rounded-lg border border-border">
@@ -263,6 +280,7 @@ export function AttendanceManagement() {
             <TableHeader>
               <TableRow>
                 <TableHead>Attendee</TableHead>
+                <TableHead>Mode</TableHead>
                 <TableHead>Ticket Code</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Check-in</TableHead>
@@ -271,14 +289,19 @@ export function AttendanceManagement() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {registrations.map((reg) => {
-    const attendee = profileMap.get(reg.attendeeId)
+              {visibleRegistrations.map((reg) => {
+                const attendee = profileMap.get(reg.attendeeId)
                 const ticket = ticketMap.get(reg.id)
                 const att = ticket ? attendanceRecords.get(ticket.id) : undefined
                 return (
                   <TableRow key={reg.id}>
                     <TableCell>
                       <p className="font-medium">{attendee?.firstName} {attendee?.lastName}</p>
+                    </TableCell>
+                    <TableCell>
+                      <Badge variant={(att?.mode ?? reg.attendanceMode) === "online" ? "secondary" : "outline"}>
+                        {(att?.mode ?? reg.attendanceMode) === "online" ? "Online" : "In person"}
+                      </Badge>
                     </TableCell>
                     <TableCell>
                       <code className="text-xs bg-muted px-2 py-0.5 rounded">{ticket?.uniqueCode ?? "—"}</code>

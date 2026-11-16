@@ -9,9 +9,11 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import { Loading } from "../components/ui/Loading"
 import { getSettings, updateSettings, updateEmailTemplate } from "../services/settingsService"
+import { useSettings } from "../contexts/SettingsContext"
 import type { AppSettings, EmailTemplate } from "../types"
 
 export function SystemSettings() {
+  const { refreshSettings } = useSettings()
   const [settings, setSettings] = useState<AppSettings | null>(null)
   const [loading, setLoading] = useState(true)
   const [saving, setSaving] = useState("")
@@ -27,7 +29,9 @@ export function SystemSettings() {
     if (!settings) return
     setSaving("general")
     try {
-      await updateSettings({ appName: settings.appName, timezone: settings.timezone, dateFormat: settings.dateFormat })
+      const saved = await updateSettings({ appName: settings.appName, timezone: settings.timezone, dateFormat: settings.dateFormat })
+      setSettings(saved)
+      await refreshSettings()
       toast.success("General settings saved")
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to save general settings")
@@ -40,7 +44,9 @@ export function SystemSettings() {
     if (!settings) return
     setSaving("branding")
     try {
-      await updateSettings({ primaryColor: settings.primaryColor, logoUrl: settings.logoUrl, faviconUrl: settings.faviconUrl })
+      const saved = await updateSettings({ primaryColor: settings.primaryColor, logoUrl: settings.logoUrl, faviconUrl: settings.faviconUrl })
+      setSettings(saved)
+      await refreshSettings()
       toast.success("Branding settings saved")
     } catch (e: any) {
       toast.error(e?.message ?? "Failed to save branding settings")

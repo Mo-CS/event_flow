@@ -92,6 +92,40 @@ export async function ensurePrivateChannel(
 }
 
 /**
+ * User ids of the event's primary organizer plus any assigned co-organizers.
+ * `events.organizer_id` references `profiles.id`, whereas `event_organizers`
+ * and `chat_channels` use `users.id`, so the primary organizer is resolved.
+ */
+async function getOrganizerUserIdsForEvent(eventId: string): Promise<string[]> {
+  const ids = new Set<string>()
+
+  const { data: event } = await supabase
+    .from("events")
+    .select("organizer_id")
+    .eq("id", eventId)
+    .single()
+
+  if (event?.organizer_id) {
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("user_id")
+      .eq("id", event.organizer_id)
+      .maybeSingle()
+    if (profile?.user_id) ids.add(profile.user_id)
+  }
+
+  const { data: orgs } = await supabase
+    .from("event_organizers")
+    .select("user_id")
+    .eq("event_id", eventId)
+  for (const org of orgs ?? []) {
+    if (org.user_id) ids.add(org.user_id)
+  }
+
+  return [...ids]
+}
+
+/**
  * Channels accessible to a user for an event, enriched with titles.
  */
 export async function getChannelsForUser(eventId: string, userId: string, attendeeProfileId?: string): Promise<ChatChannelInfo[]> {
@@ -133,20 +167,7 @@ export async function getChannelsForUser(eventId: string, userId: string, attend
       })
     }
   } else if (attendeeProfileId) {
-    const { data: orgRows } = await supabase
-      .from("event_organizers")
-      .select("user_id")
-      .eq("event_id", eventId)
-    const { data: eventRow } = await supabase
-      .from("events")
-      .select("organizer_id")
-      .eq("id", eventId)
-      .single()
-
-    const organizerIds = new Set<string>([
-      eventRow?.organizer_id,
-      ...(orgRows ?? []).map((o) => o.user_id),
-    ].filter(Boolean))
+    const organizerIds = await getOrganizerUserIdsForEvent(eventId)
 
     for (const orgId of organizerIds) {
       const channel = await ensurePrivateChannel(eventId, orgId, attendeeProfileId)
@@ -272,19 +293,7 @@ export async function getChannelMemberUserIds(channel: ChatChannel): Promise<str
     for (const p of profs ?? []) attendeeUserIds.push(p.user_id)
   }
 
-  const organizerUserIds: string[] = []
-  const { data: event } = await supabase
-    .from("events")
-    .select("organizer_id")
-    .eq("id", channel.eventId)
-    .single()
-  if (event?.organizer_id) organizerUserIds.push(event.organizer_id)
-
-  const { data: orgs } = await supabase
-    .from("event_organizers")
-    .select("user_id")
-    .eq("event_id", channel.eventId)
-  for (const o of orgs ?? []) organizerUserIds.push(o.user_id)
+  const organizerUserIds = await getOrganizerUserIdsForEvent(channel.eventId)
 
   const { data: adminRoles } = await supabase.from("roles").select("id").eq("name", "admin")
   if (adminRoles && adminRoles.length > 0) {

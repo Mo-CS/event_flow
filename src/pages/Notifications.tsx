@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
 import { useNavigate } from "react-router-dom"
-import { Bell, Mail, MailOpen, Trash2, Send, CheckCheck, ExternalLink } from "lucide-react"
+import { Bell, Mail, MailOpen, Trash2, CheckCheck, ExternalLink } from "lucide-react"
 import { toast } from "sonner"
 import { Button } from "../components/ui/button"
 import { Badge } from "../components/ui/badge"
@@ -9,7 +9,7 @@ import { EmptyState } from "../components/ui/EmptyState"
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "../components/ui/tabs"
 import { useAuth } from "../contexts/AuthContext"
 import {
-  getNotifications, markAsRead, markAllAsRead, deleteNotification, sendEventReminder,
+  getNotifications, markAsRead, markAllAsRead, deleteNotification,
 } from "../services/notificationService"
 import type { Notification } from "../types"
 
@@ -25,7 +25,6 @@ export function Notifications() {
   const navigate = useNavigate()
   const [notifs, setNotifs] = useState<Notification[]>([])
   const [loading, setLoading] = useState(true)
-  const [sending, setSending] = useState(false)
 
   const fetch = useCallback(async () => {
     if (!profile) return
@@ -67,19 +66,6 @@ export function Notifications() {
     setNotifs((prev) => prev.filter((n) => n.id !== id))
   }
 
-  const handleSendReminder = async () => {
-    if (!profile) return
-    setSending(true)
-    try {
-      const count = await sendEventReminder("event-1")
-      toast.success(`Sent ${count} reminders`)
-      fetch()
-    } catch (e: any) {
-      toast.error(e.message)
-    }
-    setSending(false)
-  }
-
   const unread = notifs.filter((n) => !n.readAt)
   const read = notifs.filter((n) => n.readAt)
 
@@ -97,9 +83,6 @@ export function Notifications() {
               <CheckCheck size={14} /> Mark All Read
             </Button>
           )}
-          <Button size="sm" variant="ghost" onClick={handleSendReminder} disabled={sending} className="gap-2">
-            <Send size={14} /> {sending ? "Sending..." : "Send Test Reminder"}
-          </Button>
         </div>
       </div>
 

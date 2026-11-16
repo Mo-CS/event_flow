@@ -9,6 +9,7 @@ import { useAuth } from "../contexts/AuthContext"
 import { getEventById, createEvent, updateEvent, setMeetingLink } from "../services/eventService"
 import { getVenues } from "../services/venueService"
 import { getCategories } from "../services/categoryService"
+import { DEFAULT_MEETING_ATTENDANCE_MINUTES } from "../constants"
 import type { Venue, Category, EventType, EventStatus } from "../types"
 
 export function EventForm() {
@@ -35,6 +36,11 @@ export function EventForm() {
   const [eventType, setEventType] = useState<EventType>("in_person")
   const [meetingLink, setMeetingLinkState] = useState("")
   const [linkSource, setLinkSource] = useState<"auto" | "manual">("auto")
+  const [meetingProvider, setMeetingProvider] = useState("jitsi")
+  const [meetingAttendanceMinutes, setMeetingAttendanceMinutes] = useState(DEFAULT_MEETING_ATTENDANCE_MINUTES)
+  const [hybridNote, setHybridNote] = useState("")
+  const [onlineCapacity, setOnlineCapacity] = useState(100)
+  const [inPersonCapacity, setInPersonCapacity] = useState(100)
   const [currentStatus, setCurrentStatus] = useState<EventStatus>("draft")
   const [currentCoverImageUrl, setCurrentCoverImageUrl] = useState("")
 
@@ -59,6 +65,11 @@ export function EventForm() {
         setVisibility(event.visibility)
         setEventType(event.eventType)
         setMeetingLinkState(event.meetingLink ?? "")
+        setMeetingProvider(event.meetingProvider ?? "jitsi")
+        setMeetingAttendanceMinutes(event.meetingAttendanceMinutes ?? DEFAULT_MEETING_ATTENDANCE_MINUTES)
+        setHybridNote(event.hybridNote ?? "")
+        setOnlineCapacity(event.onlineCapacity ?? event.capacity)
+        setInPersonCapacity(event.inPersonCapacity ?? event.capacity)
         setCurrentStatus(event.status)
         setCurrentCoverImageUrl(event.coverImageUrl ?? "")
         setLoading(false)
@@ -69,12 +80,16 @@ export function EventForm() {
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault()
     if (!profile) return
-    if (eventType === "in_person" && !venueId) {
-      toast.error("A venue is required for in-person events")
+    if (eventType !== "online" && !venueId) {
+      toast.error("A venue is required for in-person and hybrid events")
       return
     }
-    if (eventType === "online" && meetingLink.trim() && !meetingLink.trim().startsWith("http")) {
+    if (eventType !== "in_person" && meetingLink.trim() && !meetingLink.trim().startsWith("http")) {
       toast.error("Meeting link must start with http(s)://")
+      return
+    }
+    if (eventType === "hybrid" && (onlineCapacity < 1 || inPersonCapacity < 1)) {
+      toast.error("Online and in-person capacities must both be at least 1")
       return
     }
     const startTime = new Date(startDate).getTime()
@@ -94,13 +109,16 @@ export function EventForm() {
     }
     setSaving(true)
     try {
+      const isHybrid = eventType === "hybrid"
       const data = {
         title,
         description,
         coverImageUrl: currentCoverImageUrl,
         organizerId: profile.id,
         venueId,
-        capacity,
+        capacity: isHybrid ? onlineCapacity + inPersonCapacity : capacity,
+        onlineCapacity: eventType === "online" ? capacity : isHybrid ? onlineCapacity : undefined,
+        inPersonCapacity: eventType === "in_person" ? capacity : isHybrid ? inPersonCapacity : undefined,
         registrationDeadline: new Date(registrationDeadline).toISOString(),
         startDate: new Date(startDate).toISOString(),
         endDate: new Date(endDate).toISOString(),
@@ -109,16 +127,19 @@ export function EventForm() {
         contactEmail,
         categoryId,
         eventType,
+        meetingProvider: eventType === "in_person" ? undefined : meetingProvider,
+        meetingAttendanceMinutes: eventType === "in_person" ? undefined : meetingAttendanceMinutes,
+        hybridNote: isHybrid ? hybridNote : undefined,
       }
       if (isEdit && id) {
         await updateEvent(id, data)
-        if (eventType === "online" && meetingLink.trim()) {
+        if (eventType !== "in_person" && meetingLink.trim()) {
           await setMeetingLink(id, meetingLink.trim(), profile.id)
         }
         toast.success("Event updated")
       } else {
         const created = await createEvent(data)
-        if (eventType === "online" && meetingLink.trim()) {
+        if (eventType !== "in_person" && meetingLink.trim()) {
           await setMeetingLink(created.id, meetingLink.trim(), profile.id)
         }
         toast.success("Event created as draft")
@@ -133,6 +154,7 @@ export function EventForm() {
 
   const generateAutoLink = () => {
     const slug = title.trim().replace(/[^A-Za-z0-9]+/g, "-").replace(/^-+|-+$/g, "").toLowerCase() || "event"
+    setMeetingProvider("jitsi")
     setMeetingLinkState(`https://meet.jit.si/EventFlow-${slug}-${Date.now().toString(36).slice(-6)}`)
   }
 
@@ -160,6 +182,10 @@ export function EventForm() {
                 className={`flex-1 px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${eventType === "online" ? "border-primary bg-primary/10 text-primary" : "border-input bg-background text-muted-foreground"}`}>
                 Online (Virtual)
               </button>
+              <button type="button" onClick={() => setEventType("hybrid")}
+                className={`flex-1 px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${eventType === "hybrid" ? "border-primary bg-primary/10 text-primary" : "border-input bg-background text-muted-foreground"}`}>
+                Hybrid (In Person + Online)
+              </button>
             </div>
           </div>
           <div>
@@ -175,8 +201,8 @@ export function EventForm() {
           </div>
           <div className="grid sm:grid-cols-2 gap-4">
             <div>
-              <label className="block text-sm font-medium mb-1">Venue {eventType === "in_person" && <span className="text-destructive">*</span>}</label>
-              <select value={venueId} onChange={(e) => setVenueId(e.target.value)} required={eventType === "in_person"}
+              <label className="block text-sm font-medium mb-1">Venue {eventType !== "online" && <span className="text-destructive">*</span>}</label>
+              <select value={venueId} onChange={(e) => setVenueId(e.target.value)} required={eventType !== "online"}
                 className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm">
                 <option value="">{eventType === "online" ? "Not required" : "Select a venue"}</option>
                 {venues.map((v) => <option key={v.id} value={v.id}>{v.name} ({v.capacity} seats)</option>)}
@@ -193,12 +219,29 @@ export function EventForm() {
           </div>
         </div>
 
-        {eventType === "online" && (
+        {eventType !== "in_person" && (
           <div className="rounded-xl border border-border bg-card p-6 space-y-4">
-            <h2 className="font-semibold">Meeting Link</h2>
+            <h2 className="font-semibold">Meeting</h2>
             <p className="text-sm text-muted-foreground">
-              The link becomes visible to registered attendees one hour before the event starts (or immediately after generation).
+              Jitsi Meet rooms are embedded inside EventFlow. Any other provider link opens in a new tab.
+              The link becomes visible to registered attendees one hour before the event starts.
             </p>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-sm font-medium mb-1">Meeting provider</label>
+                <select value={meetingProvider} onChange={(e) => setMeetingProvider(e.target.value)}
+                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm">
+                  <option value="jitsi">Jitsi Meet (embedded)</option>
+                  <option value="external">Other provider (opens externally)</option>
+                </select>
+              </div>
+              <div>
+                <label className="block text-sm font-medium mb-1">Automatic attendance after (minutes)</label>
+                <Input type="number" min={0} value={meetingAttendanceMinutes}
+                  onChange={(e) => setMeetingAttendanceMinutes(Math.max(0, Number(e.target.value)))} />
+                <p className="text-xs text-muted-foreground mt-1">Presence is counted only while the meeting page is visible. Use 0 to disable automatic attendance.</p>
+              </div>
+            </div>
             <div className="flex gap-2">
               <button type="button" onClick={() => setLinkSource("auto")}
                 className={`px-4 py-2 rounded-lg border text-sm font-medium transition-colors ${linkSource === "auto" ? "border-primary bg-primary/10 text-primary" : "border-input bg-background text-muted-foreground"}`}>
@@ -219,6 +262,14 @@ export function EventForm() {
                 </Button>
               )}
             </div>
+            {eventType === "hybrid" && (
+              <div>
+                <label className="block text-sm font-medium mb-1">Hybrid note (optional)</label>
+                <textarea value={hybridNote} onChange={(e) => setHybridNote(e.target.value)} rows={2}
+                  className="w-full px-3 py-2 rounded-lg border border-input bg-background text-sm"
+                  placeholder="Tell attendees how the in-person and online rooms connect." />
+              </div>
+            )}
           </div>
         )}
 
@@ -239,11 +290,29 @@ export function EventForm() {
               <label className="block text-sm font-medium mb-1">Registration deadline</label>
               <Input type="datetime-local" value={registrationDeadline} onChange={(e) => setRegistrationDeadline(e.target.value)} required />
             </div>
-            <div>
-              <label className="block text-sm font-medium mb-1">Capacity</label>
-              <Input type="number" value={capacity} onChange={(e) => setCapacity(Number(e.target.value))} min={1} required />
-            </div>
+            {eventType === "hybrid" ? (
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-sm font-medium mb-1">In-person capacity</label>
+                  <Input type="number" value={inPersonCapacity} onChange={(e) => setInPersonCapacity(Number(e.target.value))} min={1} required />
+                </div>
+                <div>
+                  <label className="block text-sm font-medium mb-1">Online capacity</label>
+                  <Input type="number" value={onlineCapacity} onChange={(e) => setOnlineCapacity(Number(e.target.value))} min={1} required />
+                </div>
+              </div>
+            ) : (
+              <div>
+                <label className="block text-sm font-medium mb-1">Capacity</label>
+                <Input type="number" value={capacity} onChange={(e) => setCapacity(Number(e.target.value))} min={1} required />
+              </div>
+            )}
           </div>
+          {eventType === "hybrid" && (
+            <p className="text-xs text-muted-foreground">
+              Each mode has its own capacity and waiting list. Attendees choose in-person or online when they register.
+            </p>
+          )}
         </div>
 
         <div className="rounded-xl border border-border bg-card p-6 space-y-4">

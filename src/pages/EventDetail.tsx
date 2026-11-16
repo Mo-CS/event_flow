@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react"
-import { useParams, Link, useSearchParams } from "react-router-dom"
-import { Calendar, MapPin, Clock, User, Users, Loader2, Star, Sparkles, Lock, Video, ExternalLink } from "lucide-react"
+import { useParams, Link, useSearchParams, useNavigate } from "react-router-dom"
+import { Calendar, MapPin, Clock, User, Users, Loader2, Star, Sparkles, Lock, Video } from "lucide-react"
 import { toast } from "sonner"
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "../components/ui/tabs"
 import { Badge } from "../components/ui/badge"
@@ -8,17 +8,17 @@ import { Button } from "../components/ui/button"
 import { Textarea } from "../components/ui/textarea"
 import { Card, CardContent } from "../components/ui/card"
 import { useAuth } from "../contexts/AuthContext"
-import { getEventById, getRegistrations, registerForEvent, cancelRegistration, isMeetingLinkVisible } from "../services/eventService"
-import { markAutoAttendance } from "../services/attendanceService"
+import { getEventById, getRegistrations, registerForEvent, cancelRegistration, isMeetingLinkVisible, getWaitlistInfo, type WaitlistInfo } from "../services/eventService"
 import { getSessionsByEvent, getSpeakersBySession } from "../services/sessionService"
 import { getFeedbackByEvent, submitFeedback } from "../services/feedbackService"
 import { getProfilesByIds } from "../services/userService"
 import { getVenueById } from "../services/venueService"
-import type { Event, Session, Speaker, Registration, Feedback, Venue } from "../types"
+import type { Event, Session, Speaker, Registration, Feedback, Venue, AttendanceMode } from "../types"
 
 export function EventDetail() {
   const { id } = useParams<{ id: string }>()
   const [searchParams] = useSearchParams()
+  const navigate = useNavigate()
   const code = searchParams.get("code")
   const { isAuthenticated, profile, role, user } = useAuth()
   const [event, setEvent] = useState<Event | null>(null)
@@ -37,21 +37,8 @@ export function EventDetail() {
   const [review, setReview] = useState("")
   const [submitting, setSubmitting] = useState(false)
   const [loading, setLoading] = useState(true)
-  const [attendanceMarked, setAttendanceMarked] = useState(false)
-
-  const handleJoinMeeting = async () => {
-    if (!event || !event.meetingLink || !profile) return
-    window.open(event.meetingLink, "_blank", "noopener,noreferrer")
-    if (!attendanceMarked && role === "attendee") {
-      try {
-        await markAutoAttendance(event.id, profile.id)
-        setAttendanceMarked(true)
-        toast.success("Attendance recorded automatically")
-      } catch {
-        // attendance is best-effort
-      }
-    }
-  }
+  const [attendanceMode, setAttendanceMode] = useState<AttendanceMode>("in_person")
+  const [waitlistInfo, setWaitlistInfo] = useState<WaitlistInfo | null>(null)
 
   const fetchData = useCallback(async () => {
     if (!id) return
@@ -95,6 +82,13 @@ export function EventDetail() {
       if (profile) {
         const mine = regs.find((r) => r.attendeeId === profile.id && r.status !== "cancelled")
         setMyRegistration(mine)
+        setAttendanceMode(mine?.attendanceMode ?? (data.eventType === "online" ? "online" : "in_person"))
+        if (mine?.status === "waitlisted") {
+          const info = await getWaitlistInfo(data.id, mine.id).catch(() => null)
+          setWaitlistInfo(info)
+        } else {
+          setWaitlistInfo(null)
+        }
       }
     }
     setLoading(false)
@@ -106,9 +100,19 @@ export function EventDetail() {
     if (!id || !profile) return
     setRegistering(true)
     try {
-      const result = await registerForEvent(id, profile.id, validCode)
+      const result = await registerForEvent(
+        id,
+        profile.id,
+        validCode,
+        event?.eventType === "hybrid" ? attendanceMode : undefined,
+      )
       if (result.waitlisted) {
-        toast.success("Event is full — you've been added to the waiting list!")
+        const position = result.waitlistPosition ?? result.waitlistInfo?.position
+        toast.success(
+          position
+            ? `Event is full — you are number ${position} on the waiting list.`
+            : "Event is full — you've been added to the waiting list!",
+        )
       } else {
         toast.success("Successfully registered! Check your dashboard for tickets.")
       }
@@ -169,8 +173,22 @@ export function EventDetail() {
 
   const emailMismatch = !!(event.visibility === "private" && invitedEmail && user && user.email !== invitedEmail)
 
-  const confirmedCount = registrations.filter((r) => r.status === "confirmed").length
-  const spotsLeft = event.capacity - confirmedCount
+  const isHybrid = event.eventType === "hybrid"
+  const confirmedAll = registrations.filter((r) => r.status === "confirmed")
+  const confirmedForMode = isHybrid
+    ? confirmedAll.filter((r) => (r.attendanceMode ?? "in_person") === attendanceMode)
+    : confirmedAll
+  const modeCapacity = isHybrid
+    ? attendanceMode === "online"
+      ? event.onlineCapacity ?? event.capacity
+      : event.inPersonCapacity ?? event.capacity
+    : event.eventType === "online"
+      ? event.onlineCapacity ?? event.capacity
+      : event.inPersonCapacity ?? event.capacity
+  const confirmedCount = confirmedAll.length
+  const spotsLeft = Math.max(0, modeCapacity - confirmedForMode.length)
+  const canJoinOnline = !!myRegistration && myRegistration.status === "confirmed" &&
+    (event.eventType === "online" || myRegistration.attendanceMode === "online")
 
   return (
     <div className="relative max-w-4xl mx-auto px-4 py-12">
@@ -208,8 +226,8 @@ export function EventDetail() {
             )}
             <div className="flex flex-wrap gap-4 mb-6 text-sm text-muted-foreground">
               <span className="flex items-center gap-1.5"><Calendar size={16} className="text-teal-500" />{new Date(event.startDate).toLocaleDateString()} - {new Date(event.endDate).toLocaleDateString()}</span>
-              <span className="flex items-center gap-1.5"><MapPin size={16} className="text-teal-500" />{event.eventType === "online" ? "Online event" : (venue?.name ?? "Unknown venue")}</span>
-              <span className="flex items-center gap-1.5"><Users size={16} className="text-teal-500" />{confirmedCount}/{event.capacity} registered</span>
+              <span className="flex items-center gap-1.5"><MapPin size={16} className="text-teal-500" />{event.eventType === "online" ? "Online event" : isHybrid ? `Hybrid — ${venue?.name ?? "venue TBA"} + online` : (venue?.name ?? "Unknown venue")}</span>
+              <span className="flex items-center gap-1.5"><Users size={16} className="text-teal-500" />{isHybrid ? `${confirmedForMode.length}/${modeCapacity} ${attendanceMode === "online" ? "online" : "in-person"} seats` : `${confirmedCount}/${modeCapacity} registered`}</span>
             </div>
             {spotsLeft > 0 && spotsLeft <= 10 && (
               <Badge variant="destructive" className="mb-4">Only {spotsLeft} spot{spotsLeft > 1 ? "s" : ""} left!</Badge>
@@ -236,26 +254,55 @@ export function EventDetail() {
                   ) : (
                     <div className="space-y-3">
                       {myRegistration ? (
-                        <>
+                        <div className="space-y-3">
                           <Badge variant={myRegistration.status === "confirmed" ? "default" : "secondary"} className="w-full justify-center py-1.5 text-sm">
                             {myRegistration.status === "confirmed" ? "✓ Registered" : myRegistration.status === "waitlisted" ? "⏳ On Waiting List" : myRegistration.status}
                           </Badge>
+                          {isHybrid && myRegistration.attendanceMode && (
+                            <p className="text-xs text-muted-foreground text-center">
+                              Attendance mode: <strong className="text-foreground">{myRegistration.attendanceMode === "online" ? "Online" : "In person"}</strong>
+                            </p>
+                          )}
+                          {myRegistration.status === "waitlisted" && waitlistInfo && (
+                            <div className="rounded-lg border border-amber-500/30 bg-amber-500/10 p-3 text-xs space-y-1">
+                              <p>Position <strong>#{waitlistInfo.position}</strong> of {waitlistInfo.waitlistTotal}</p>
+                              <p>{waitlistInfo.ahead} ahead of you</p>
+                              <p>{waitlistInfo.availableSeats} seat{waitlistInfo.availableSeats === 1 ? "" : "s"} available now</p>
+                            </div>
+                          )}
                           <Button variant="outline" className="w-full text-destructive" onClick={handleCancel} disabled={registering}>
                             {registering ? <Loader2 size={16} className="animate-spin" /> : null}
                             Cancel Registration
                           </Button>
-                        </>
+                        </div>
                       ) : (
-                        <>
+                        <div className="space-y-3">
+                          {isHybrid && (
+                            <div>
+                              <p className="text-xs font-medium mb-1.5">Attendance mode</p>
+                              <div className="grid grid-cols-2 gap-2">
+                                <button type="button" onClick={() => setAttendanceMode("in_person")}
+                                  className={`px-2 py-1.5 rounded-lg border text-xs font-medium transition-colors ${attendanceMode === "in_person" ? "border-primary bg-primary/10 text-primary" : "border-input bg-background text-muted-foreground"}`}>
+                                  In person
+                                </button>
+                                <button type="button" onClick={() => setAttendanceMode("online")}
+                                  className={`px-2 py-1.5 rounded-lg border text-xs font-medium transition-colors ${attendanceMode === "online" ? "border-primary bg-primary/10 text-primary" : "border-input bg-background text-muted-foreground"}`}>
+                                  Online
+                                </button>
+                              </div>
+                            </div>
+                          )}
                           <div className="text-center mb-2">
                             <p className="text-2xl font-bold">{spotsLeft}</p>
-                            <p className="text-xs text-muted-foreground">spots remaining</p>
+                            <p className="text-xs text-muted-foreground">
+                              {isHybrid ? `${attendanceMode === "online" ? "online" : "in-person"} spots remaining` : "spots remaining"}
+                            </p>
                           </div>
                           <Button className="w-full bg-gradient-to-r from-teal-500 via-amber-500 to-emerald-500 text-white shadow-md shadow-teal-500/20" onClick={handleRegister} disabled={registering}>
                             {registering ? <Loader2 size={16} className="animate-spin" /> : null}
                             {spotsLeft <= 0 ? "Join Waiting List" : "Register Now"}
                           </Button>
-                        </>
+                        </div>
                       )}
                     </div>
                   )
@@ -267,41 +314,43 @@ export function EventDetail() {
           </div>
         </div>
 
-        {event.eventType === "online" && isMeetingLinkVisible(event) && myRegistration && myRegistration.status === "confirmed" && (
+        {(event.eventType === "online" || event.eventType === "hybrid") && isMeetingLinkVisible(event) && canJoinOnline && (
           <div className="mt-6 rounded-xl border border-primary/30 bg-primary/5 p-5 flex flex-col sm:flex-row sm:items-center gap-4">
             <div className="flex items-center gap-3 flex-1">
               <div className="p-3 rounded-lg bg-primary/15 text-primary">
                 <Video size={22} />
               </div>
               <div>
-                <p className="font-semibold">Online Meeting</p>
+                <p className="font-semibold">{event.eventType === "hybrid" ? "Online Meeting Room" : "Online Meeting"}</p>
                 <p className="text-sm text-muted-foreground">
-                  {event.meetingLinkCreatedAt
-                    ? `Link generated on ${new Date(event.meetingLinkCreatedAt).toLocaleString()}`
-                    : "The meeting link is now available."}
+                  {event.meetingProvider === "external"
+                    ? "This meeting opens in a new tab from the meeting page."
+                    : "The Jitsi room is embedded in EventFlow, with attendance and in-meeting chat."}
                 </p>
               </div>
             </div>
-            <Button className="gap-2 bg-gradient-to-r from-teal-500 to-amber-500 text-white" onClick={handleJoinMeeting}>
-              <ExternalLink size={16} /> Join Meeting
+            <Button className="gap-2 bg-gradient-to-r from-teal-500 to-amber-500 text-white" onClick={() => navigate(`/dashboard/events/${event.id}/meeting`)}>
+              <Video size={16} /> Open meeting room
             </Button>
           </div>
         )}
 
-        {event.eventType === "online" && !isMeetingLinkVisible(event) && myRegistration && (
+        {(event.eventType === "online" || event.eventType === "hybrid") && !isMeetingLinkVisible(event) && canJoinOnline && (
           <div className="mt-6 rounded-xl border border-border bg-muted/30 p-5 flex items-center gap-3">
             <Video size={20} className="text-muted-foreground" />
             <p className="text-sm text-muted-foreground">
-              The meeting link will be available here one hour before the event starts. Only registered attendees can join.
+              The meeting room will be available here one hour before the event starts. Only registered attendees can join.
             </p>
           </div>
         )}
 
-        {confirmedCount >= event.capacity && !myRegistration && (
+        {spotsLeft <= 0 && !myRegistration && (
           <div className="mt-6 rounded-xl border border-amber-500/40 bg-amber-500/10 p-5">
             <p className="font-semibold text-amber-700 dark:text-amber-400">Capacity is full</p>
             <p className="text-sm text-muted-foreground mt-1">
-              All seats are taken. You can still join the waiting list — you'll be notified automatically if a spot opens up.
+              {isHybrid
+                ? `All ${attendanceMode === "online" ? "online" : "in-person"} seats are taken. You can join that waiting list or switch the attendance mode above.`
+                : "All seats are taken. You can still join the waiting list — you'll be notified automatically if a spot opens up."}
             </p>
           </div>
         )}
@@ -314,6 +363,12 @@ export function EventDetail() {
           </TabsList>
           <TabsContent value="about" className="mt-6">
             <p className="text-muted-foreground leading-relaxed">{event.description}</p>
+            {isHybrid && event.hybridNote && (
+              <div className="mt-4 rounded-lg border border-primary/20 bg-primary/5 p-4">
+                <p className="text-xs font-semibold uppercase tracking-wide text-primary mb-1">Hybrid attendance</p>
+                <p className="text-sm text-muted-foreground">{event.hybridNote}</p>
+              </div>
+            )}
           </TabsContent>
           {sessions.length > 0 && (
             <TabsContent value="schedule" className="mt-6 space-y-4">

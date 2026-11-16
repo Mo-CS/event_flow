@@ -12,7 +12,8 @@
 '   - Check-in / attendance               : src/services/attendanceService.ts, src/pages/AttendanceManagement.tsx
 '   - Evaluations                         : src/services/evaluationService.ts, supabase/schema.sql:574
 '   - Chat                                : src/services/chatService.ts, src/pages/EventChat.tsx
-'   - Chatbot                             : supabase/functions/chatbot/index.ts, src/components/chat/useChat.ts
+'   - Chatbot                             : src/components/chat/useChat.ts (فعلي: LM Studio محلي)؛
+'                                           supabase/functions/chatbot/index.ts (تصميم بديل غير مستخدم)
 ' ============================================================================
 
 @startuml EventFlow-UseCases
@@ -34,7 +35,7 @@ skinparam noteBorderColor #CA8A04
 
 ' ---------- External systems ----------
 actor "Supabase" as SUPABASE <<system>>
-actor "OpenRouter AI" as OPENROUTER <<system>>
+actor "LM Studio (Local LLM Server)" as LMS_LOCAL <<system>>
 actor "Camera / QR" as CAMERA <<device>>
 actor "Email Gateway (Simulated)" as EMAIL <<external>>
 
@@ -204,7 +205,7 @@ SUPABASE --> UC04 : "persists user + profile\n(register_user RPC)"
 SUPABASE --> UC05 : "verifies credentials\n(authenticate_user RPC)"
 SUPABASE --> UC25 : "attendance/tickets REST"
 SUPABASE --> UC12 : "tickets table + storage"
-OPENROUTER --> UC03 : "LLM completion"
+LMS_LOCAL --> UC03 : "chat/completions\n(المسار الفعلي للواجهة)"
 CAMERA --> UC25 : "reads QR code"
 EMAIL --> UC06 : "reset link delivery\n(simulated in demo)"
 
@@ -234,6 +235,14 @@ note right of UC25
   -- check-in, check-out, already processed
   -- fail: ticket used, registration not confirmed
   -- fallback: manual code entry when camera unavailable
+end note
+
+note right of UC03
+  Chatbot backend (actual): the SPA calls LM Studio locally
+  via /lmstudio/v1/chat/completions; tools are executed from
+  the browser directly against Supabase REST.
+  (Edge Function + OpenRouter remain in the repo as a
+  design alternative, NOT used by the current UI.)
 end note
 
 ' ============================================================================

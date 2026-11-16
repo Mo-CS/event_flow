@@ -113,7 +113,17 @@ export async function isOrganizerOfEvent(eventId: string, userId: string): Promi
     .select("organizer_id")
     .eq("id", eventId)
     .single()
-  if (event && event.organizer_id === userId) return true
+
+  if (event?.organizer_id) {
+    // events.organizer_id references profiles.id, while callers pass users.id.
+    if (event.organizer_id === userId) return true
+    const { data: profile } = await supabase
+      .from("profiles")
+      .select("id")
+      .eq("user_id", userId)
+      .maybeSingle()
+    if (profile?.id && event.organizer_id === profile.id) return true
+  }
 
   const { data } = await supabase
     .from("event_organizers")

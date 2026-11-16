@@ -3,7 +3,8 @@ import { Outlet, Link, useNavigate, useLocation } from "react-router-dom"
 import {
   LayoutDashboard, Calendar, User, Moon, Sun, Menu, X,
   LogOut, ChevronDown, UserCog, Layers, Building2, ListTodo,
-  Bell, FileUp, BarChart3, Settings, Shield,
+  Bell, FileUp, BarChart3, Settings, Shield, PlusCircle, Ban,
+  Wallet, Users, Mail, Megaphone, KeyRound,
 } from "lucide-react"
 import { Toaster } from "../ui/toaster"
 import { Avatar, AvatarFallback } from "../ui/avatar"
@@ -12,13 +13,15 @@ import {
   DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger,
 } from "../ui/dropdown-menu"
 import { useAuth } from "../../contexts/AuthContext"
+import { useSettings } from "../../contexts/SettingsContext"
 import { useTheme } from "../../contexts/ThemeContext"
 import { usePageTitle } from "../../lib/usePageTitle"
 import { getUnreadCount, getNotifications, markAllAsRead } from "../../services/notificationService"
 import ChatWidget from "../chat/ChatWidget"
 
 export function AppLayout() {
-  const { profile, role, logout } = useAuth()
+  const { user, profile, role, logout } = useAuth()
+  const { appName, logoUrl } = useSettings()
   const { theme, toggleTheme } = useTheme()
   const navigate = useNavigate()
   const location = useLocation()
@@ -33,6 +36,14 @@ export function AppLayout() {
     getUnreadCount(profile.userId).then(setUnread)
     getNotifications(profile.userId).then((n) => setRecentNotifs(n.slice(0, 5)))
   }, [profile])
+
+  // A temporary password issued by an administrator must be replaced before
+  // the user can reach any other dashboard page.
+  useEffect(() => {
+    if (!user?.mustChangePassword) return
+    if (location.pathname === "/dashboard/change-password") return
+    navigate("/dashboard/change-password", { replace: true })
+  }, [user?.mustChangePassword, location.pathname, navigate])
 
   const handleMarkAllRead = async () => {
     if (!profile) return
@@ -51,10 +62,15 @@ export function AppLayout() {
   const sidebarLinks = [
     { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
     { to: "/events", label: "Browse Events", icon: Calendar },
+    { to: "/dashboard/event-requests", label: "Event Requests", icon: PlusCircle },
   ]
 
   if (role === "organizer" || role === "admin") {
     sidebarLinks.push({ to: "/dashboard/events", label: "My Events", icon: ListTodo })
+    sidebarLinks.push({ to: "/dashboard/bans", label: "Bans", icon: Ban })
+    sidebarLinks.push({ to: "/dashboard/finance", label: "Finance", icon: Wallet })
+    sidebarLinks.push({ to: "/dashboard/audience", label: "Audience", icon: Users })
+    sidebarLinks.push({ to: "/dashboard/campaigns", label: "Campaigns", icon: Mail })
   }
 
   if (role === "admin") {
@@ -63,6 +79,8 @@ export function AppLayout() {
     sidebarLinks.push({ to: "/dashboard/admin/venues", label: "Venues", icon: Building2 })
     sidebarLinks.push({ to: "/dashboard/admin/files", label: "Files", icon: FileUp })
     sidebarLinks.push({ to: "/dashboard/admin/reports", label: "Reports", icon: BarChart3 })
+    sidebarLinks.push({ to: "/dashboard/admin/broadcast", label: "Broadcast", icon: Megaphone })
+    sidebarLinks.push({ to: "/dashboard/admin/password-resets", label: "Password Resets", icon: KeyRound })
     sidebarLinks.push({ to: "/dashboard/admin/settings", label: "Settings", icon: Settings })
     sidebarLinks.push({ to: "/dashboard/admin/security", label: "Security", icon: Shield })
   }
@@ -73,9 +91,10 @@ export function AppLayout() {
     <div className="flex h-screen bg-background">
       <aside className={`fixed inset-y-0 left-0 z-50 w-64 border-r border-border transform transition-transform lg:relative lg:translate-x-0 bg-white/90 dark:bg-card/90 backdrop-blur-xl ${sidebarOpen ? "translate-x-0" : "-translate-x-full"} lg:translate-x-0`}>
         <div className="flex items-center justify-between h-16 px-6 border-b border-border">
-          <Link to="/dashboard" className="text-xl font-bold">
+          <Link to="/dashboard" className="flex items-center gap-2 text-xl font-bold">
+            {logoUrl && <img src={logoUrl} alt="" className="h-7 w-auto" />}
             <span className="bg-gradient-to-r from-[hsl(185,85%,38%)] via-[hsl(165,80%,40%)] to-[hsl(35,92%,52%)] bg-clip-text text-transparent">
-              EventFlow
+              {appName}
             </span>
           </Link>
           <button onClick={() => setSidebarOpen(false)} className="lg:hidden text-muted-foreground hover:text-foreground">

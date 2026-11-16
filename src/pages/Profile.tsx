@@ -1,7 +1,8 @@
 import { useState, useEffect, useCallback } from "react"
+import { useNavigate } from "react-router-dom"
 import { useAuth } from "../contexts/AuthContext"
 import { toast } from "sonner"
-import { Monitor, Smartphone, Laptop, Globe, Trash2, LogOut } from "lucide-react"
+import { Monitor, Smartphone, Laptop, Globe, Trash2, LogOut, ShieldAlert, FileDown } from "lucide-react"
 import { Avatar, AvatarFallback } from "../components/ui/avatar"
 import { Button } from "../components/ui/button"
 import { Input } from "../components/ui/input"
@@ -11,6 +12,8 @@ import { Badge } from "../components/ui/badge"
 import { updateUser } from "../services/userService"
 import { setOrganizerAllEvents } from "../services/organizerService"
 import { getDeviceSessions, deleteDeviceSession, deleteAllDeviceSessions, type SessionListItem } from "../services/deviceSessionService"
+import { requestAccountDeletion, getAnonymizedAccountReport } from "../services/accountService"
+import { DEFAULT_ACCOUNT_DELETION_GRACE_DAYS } from "../constants"
 
 const SESSION_KEY = "eventflow_session"
 
@@ -23,7 +26,8 @@ function deviceIcon(name: string) {
 }
 
 export function Profile() {
-  const { user, profile, role, refreshProfile } = useAuth()
+  const { user, profile, role, refreshProfile, logout } = useAuth()
+  const navigate = useNavigate()
   const [firstName, setFirstName] = useState(profile?.firstName ?? "")
   const [lastName, setLastName] = useState(profile?.lastName ?? "")
   const [phone, setPhone] = useState(profile?.phoneNumber ?? "")
@@ -33,6 +37,8 @@ export function Profile() {
   const [sessionsLoading, setSessionsLoading] = useState(true)
   const [revokingId, setRevokingId] = useState<string | null>(null)
   const [revokingAll, setRevokingAll] = useState(false)
+  const [deleting, setDeleting] = useState(false)
+  const [downloadingReport, setDownloadingReport] = useState(false)
 
   const initials = `${profile?.firstName?.[0] ?? ""}${profile?.lastName?.[0] ?? ""}`
 
@@ -105,6 +111,58 @@ export function Profile() {
     } catch {
       setManagesAll(!checked)
       toast.error("Failed to update setting")
+    }
+  }
+
+  const handleDownloadReport = async () => {
+    if (!user || !profile) return
+    setDownloadingReport(true)
+    try {
+      const report = await getAnonymizedAccountReport(profile.id, user.id)
+      const blob = new Blob([JSON.stringify(report, null, 2)], { type: "application/json" })
+      const link = document.createElement("a")
+      link.href = URL.createObjectURL(blob)
+      link.download = `eventflow-anonymized-activity-${new Date().toISOString().slice(0, 10)}.json`
+      link.click()
+      URL.revokeObjectURL(link.href)
+      toast.success("Anonymized activity report downloaded")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to build the report")
+    } finally {
+      setDownloadingReport(false)
+    }
+  }
+
+  const handleDeleteAccount = async () => {
+    if (!user) return
+    const graceDays = DEFAULT_ACCOUNT_DELETION_GRACE_DAYS
+    const recoveryText = graceDays > 0
+      ? `all data is kept for a ${graceDays}-day recovery window. You can restore it from the login page during that window.`
+      : "all data is kept and only an administrator can restore the account."
+    if (!window.confirm(
+      `Delete your account?\n\nYour account is disabled immediately and ${recoveryText} ` +
+      "Organizer events are transferred to an administrator.",
+    )) return
+    const reason = window.prompt("Optional reason for leaving (kept for administrators):") ?? ""
+    setDeleting(true)
+    try {
+      const result = await requestAccountDeletion({
+        userId: user.id,
+        profileId: profile?.id,
+        email: user.email,
+        reason,
+      })
+      toast.success(
+        result.restoreUntil
+          ? `Account disabled. You can restore it until ${new Date(result.restoreUntil).toLocaleDateString()}.`
+          : "Account disabled. Contact an administrator to restore it.",
+      )
+      logout()
+      navigate("/login")
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Failed to delete the account")
+    } finally {
+      setDeleting(false)
     }
   }
 
@@ -229,6 +287,36 @@ export function Profile() {
               ))}
             </div>
           )}
+        </CardContent>
+      </Card>
+
+      <Card className="border-destructive/40">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-destructive">
+            <ShieldAlert size={18} /> Danger zone
+          </CardTitle>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div>
+            <p className="font-medium">Delete my account</p>
+            <p className="text-sm text-muted-foreground">
+              The account is disabled immediately and all data is retained for a 30-day recovery window.
+              Organizer events are transferred to an administrator first. You can restore the account from the login page
+              during the recovery window, or ask an administrator afterwards.
+            </p>
+          </div>
+          <div className="flex flex-wrap gap-2">
+            <Button type="button" variant="outline" className="gap-2" onClick={handleDownloadReport} disabled={downloadingReport}>
+              <FileDown size={15} /> {downloadingReport ? "Preparing..." : "Download anonymized activity report"}
+            </Button>
+            <Button type="button" variant="destructive" className="gap-2" onClick={handleDeleteAccount} disabled={deleting}>
+              <Trash2 size={15} /> {deleting ? "Deleting..." : "Delete account"}
+            </Button>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            The anonymized report contains counts only (events, registrations, attendance, feedback, chat messages)
+            and never includes your name, email or phone number.
+          </p>
         </CardContent>
       </Card>
     </div>

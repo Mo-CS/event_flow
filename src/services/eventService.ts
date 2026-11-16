@@ -1,6 +1,7 @@
 import { supabase } from "../lib/supabase"
-import type { Event, Session, Speaker, Registration, Feedback, Ticket } from "../types"
-import QRCode from "qrcode"
+import type { AttendanceMode, Event, Session, Speaker, Registration, Feedback, Ticket } from "../types"
+import { checkBanForRegistration, describeBan } from "./banService"
+import { generateTicket } from "./ticketService"
 
 export async function getEvents(): Promise<Event[]> {
   const { data, error } = await supabase
@@ -29,7 +30,8 @@ export async function getEventById(id: string): Promise<Event | undefined> {
     .from("events")
     .select("*")
     .eq("id", id)
-    .single()
+    .is("deleted_at", null)
+    .maybeSingle()
   if (error) throw error
   return data ? mapEvent(data) : undefined
 }
@@ -112,6 +114,12 @@ export async function updateEvent(id: string, data: Partial<Event>): Promise<Eve
   if (data.categoryId !== undefined) payload.category_id = data.categoryId
   if (data.eventType !== undefined) payload.event_type = data.eventType
   if (data.meetingLink !== undefined) payload.meeting_link = data.meetingLink
+  if (data.onlineCapacity !== undefined) payload.online_capacity = data.onlineCapacity
+  if (data.inPersonCapacity !== undefined) payload.in_person_capacity = data.inPersonCapacity
+  if (data.meetingProvider !== undefined) payload.meeting_provider = data.meetingProvider
+  if (data.meetingAttendanceMinutes !== undefined) payload.meeting_attendance_minutes = data.meetingAttendanceMinutes
+  if (data.meetingRoomName !== undefined) payload.meeting_room_name = data.meetingRoomName
+  if (data.hybridNote !== undefined) payload.hybrid_note = data.hybridNote
   const { data: updated, error } = await supabase
     .from("events")
     .update(payload)
@@ -142,7 +150,7 @@ export async function setMeetingLink(
 }
 
 export function isMeetingLinkVisible(event: Pick<Event, "eventType" | "meetingLink" | "startDate" | "meetingLinkCreatedAt">): boolean {
-  if (event.eventType !== "online" || !event.meetingLink) return false
+  if (event.eventType === "in_person" || !event.meetingLink) return false
   const oneHourBefore = new Date(event.startDate).getTime() - 60 * 60 * 1000
   return Date.now() >= oneHourBefore
 }
@@ -233,10 +241,145 @@ export async function getRegistrationForAttendee(eventId: string, attendeeId: st
   return data ? mapRegistration(data) : undefined
 }
 
-export async function registerForEvent(eventId: string, attendeeId: string, code?: string): Promise<{ registration: Registration; waitlisted: boolean }> {
+function resolveAttendanceMode(eventType: string | null, requested?: AttendanceMode | null): AttendanceMode {
+  if (eventType === "hybrid") {
+    if (requested !== "online" && requested !== "in_person") {
+      throw new Error("Choose whether you will attend in person or online")
+    }
+    return requested
+  }
+  return eventType === "online" ? "online" : "in_person"
+}
+
+function capacityForMode(
+  event: { capacity: number; event_type?: string | null; online_capacity?: number | null; in_person_capacity?: number | null },
+  mode: AttendanceMode,
+): number {
+  if (event.event_type === "hybrid") {
+    return mode === "online"
+      ? Number(event.online_capacity ?? event.capacity ?? 0)
+      : Number(event.in_person_capacity ?? event.capacity ?? 0)
+  }
+  return Number(event.capacity ?? 0)
+}
+
+async function countConfirmed(eventId: string, mode?: AttendanceMode): Promise<number> {
+  let query = supabase
+    .from("registrations")
+    .select("id", { count: "exact", head: true })
+    .eq("event_id", eventId)
+    .eq("status", "confirmed")
+  if (mode) query = query.eq("attendance_mode", mode)
+  const { count } = await query
+  return count ?? 0
+}
+
+/** 1-based waiting-list position from the registration timestamp. */
+export async function getWaitlistPosition(
+  eventId: string,
+  registeredAt: string,
+  mode?: AttendanceMode,
+): Promise<number> {
+  let query = supabase
+    .from("registrations")
+    .select("registered_at")
+    .eq("event_id", eventId)
+    .eq("status", "waitlisted")
+  if (mode) query = query.eq("attendance_mode", mode)
+  const { data } = await query.order("registered_at")
+  const rows = data ?? []
+  const index = rows.findIndex((row: any) => new Date(row.registered_at).getTime() >= new Date(registeredAt).getTime())
+  return index === -1 ? rows.length + 1 : index + 1
+}
+
+export interface WaitlistInfo {
+  position: number
+  ahead: number
+  waitlistTotal: number
+  confirmed: number
+  capacity: number
+  availableSeats: number
+}
+
+export async function getWaitlistInfo(eventId: string, registrationId: string): Promise<WaitlistInfo> {
+  const { data: reg } = await supabase
+    .from("registrations")
+    .select("event_id, status, attendance_mode, registered_at")
+    .eq("id", registrationId)
+    .maybeSingle()
   const { data: event } = await supabase
     .from("events")
-    .select("title, capacity, visibility, status, start_date, end_date, registration_deadline")
+    .select("capacity, event_type, online_capacity, in_person_capacity")
+    .eq("id", eventId)
+    .maybeSingle()
+
+  const mode = resolveAttendanceMode(event?.event_type ?? null, (reg as any)?.attendance_mode)
+  const capacity = event ? capacityForMode(event, mode) : 0
+  const confirmed = await countConfirmed(eventId, event?.event_type === "hybrid" ? mode : undefined)
+
+  let waitlistQuery = supabase
+    .from("registrations")
+    .select("id, registered_at")
+    .eq("event_id", eventId)
+    .eq("status", "waitlisted")
+  if (event?.event_type === "hybrid") waitlistQuery = waitlistQuery.eq("attendance_mode", mode)
+  const { data: waitlisted } = await waitlistQuery.order("registered_at")
+  const rows = (waitlisted ?? []) as { id: string; registered_at: string }[]
+  const index = rows.findIndex((row) => row.id === registrationId)
+  const isWaitlisted = (reg as any)?.status === "waitlisted" && index !== -1
+
+  return {
+    position: isWaitlisted ? index + 1 : 0,
+    ahead: isWaitlisted ? index : 0,
+    waitlistTotal: rows.length,
+    confirmed,
+    capacity,
+    availableSeats: Math.max(0, capacity - confirmed),
+  }
+}
+
+export interface RegistrationCounts {
+  confirmed: number
+  waitlisted: number
+  onlineConfirmed: number
+  inPersonConfirmed: number
+  capacity: number
+  onlineCapacity: number
+  inPersonCapacity: number
+}
+
+export async function getRegistrationCounts(eventId: string): Promise<RegistrationCounts> {
+  const { data: event } = await supabase
+    .from("events")
+    .select("capacity, event_type, online_capacity, in_person_capacity")
+    .eq("id", eventId)
+    .maybeSingle()
+  const { data } = await supabase
+    .from("registrations")
+    .select("status, attendance_mode")
+    .eq("event_id", eventId)
+  const rows = (data ?? []) as { status: string; attendance_mode?: string | null }[]
+  const confirmed = rows.filter((r) => r.status === "confirmed")
+  return {
+    confirmed: confirmed.length,
+    waitlisted: rows.filter((r) => r.status === "waitlisted").length,
+    onlineConfirmed: confirmed.filter((r) => r.attendance_mode === "online").length,
+    inPersonConfirmed: confirmed.filter((r) => r.attendance_mode === "in_person").length,
+    capacity: Number(event?.capacity ?? 0),
+    onlineCapacity: Number(event?.online_capacity ?? event?.capacity ?? 0),
+    inPersonCapacity: Number(event?.in_person_capacity ?? event?.capacity ?? 0),
+  }
+}
+
+export async function registerForEvent(
+  eventId: string,
+  attendeeId: string,
+  code?: string,
+  attendanceMode?: AttendanceMode,
+): Promise<{ registration: Registration; waitlisted: boolean; waitlistPosition?: number; waitlistInfo?: WaitlistInfo }> {
+  const { data: event } = await supabase
+    .from("events")
+    .select("title, capacity, visibility, status, start_date, end_date, registration_deadline, event_type, online_capacity, in_person_capacity, category_id")
     .eq("id", eventId)
     .single()
   if (!event) throw new Error("Event not found")
@@ -251,6 +394,13 @@ export async function registerForEvent(eventId: string, attendeeId: string, code
     throw new Error("This event has already ended")
   }
 
+  const { data: profile } = await supabase
+    .from("profiles")
+    .select("id, user_id, user:users(email)")
+    .eq("id", attendeeId)
+    .maybeSingle()
+  if (!profile) throw new Error("Profile not found")
+
   if (event.visibility === "private") {
     if (!code) throw new Error("An invitation code is required for this private event")
     const { getLinkByCode } = await import("./invitationService")
@@ -259,67 +409,72 @@ export async function registerForEvent(eventId: string, attendeeId: string, code
     if (link.used) throw new Error("This invitation link has already been used")
     if (link.eventId !== eventId) throw new Error("This invitation link does not belong to this event")
 
-    const { data: profile } = await supabase
-      .from("profiles")
-      .select("user:users(email)")
-      .eq("id", attendeeId)
-      .single()
     const attendeeEmail = (profile as any)?.user?.email
     if (!attendeeEmail || attendeeEmail !== link.email) {
       throw new Error("This invitation was sent to a different email address")
     }
   }
 
+  // Bans only block new registrations; existing registrations are untouched.
+  const ban = await checkBanForRegistration(profile.user_id, eventId, event.category_id ?? undefined)
+  if (ban) {
+    const expiry = ban.isPermanent ? "" : ban.expiresAt ? ` until ${new Date(ban.expiresAt).toLocaleDateString()}` : ""
+    throw new Error(
+      `You cannot register for this event because of ${describeBan(ban)}${expiry}.${ban.reason ? ` Reason: ${ban.reason}.` : ""}`,
+    )
+  }
+
   const existing = await getRegistrationForAttendee(eventId, attendeeId)
   if (existing) throw new Error("Already registered for this event")
 
-  const { count } = await supabase
-    .from("registrations")
-    .select("*", { count: "exact", head: true })
-    .eq("event_id", eventId)
-    .eq("status", "confirmed")
+  const mode = resolveAttendanceMode(event.event_type, attendanceMode)
+  const capacity = capacityForMode(event, mode)
+  const confirmedCount = await countConfirmed(eventId, event.event_type === "hybrid" ? mode : undefined)
+  const isFull = capacity > 0 && confirmedCount >= capacity
 
-  const isFull = (count ?? 0) >= event.capacity
-
-  const status = isFull ? "waitlisted" : "confirmed"
+  const status: "confirmed" | "waitlisted" = isFull ? "waitlisted" : "confirmed"
 
   const { data: registration, error } = await supabase
     .from("registrations")
-    .insert({ event_id: eventId, attendee_id: attendeeId, status })
+    .insert({ event_id: eventId, attendee_id: attendeeId, status, attendance_mode: mode })
     .select()
     .single()
   if (error) throw error
 
   if (!isFull) {
-    await generateTicketForRegistration(mapRegistration(registration), event.title)
+    await generateTicketForRegistration(mapRegistration(registration), event.title, event.event_type)
   }
 
   const reg = mapRegistration(registration)
 
   // Send confirmation / waitlist notification
   const { sendNotification } = await import("./notificationService")
-  const { data: prof } = await supabase
-    .from("profiles")
-    .select("user_id")
-    .eq("id", attendeeId)
-    .single()
-  if (prof) {
-    if (!isFull) {
-      await sendNotification(
-        prof.user_id,
-        "registration_confirmation",
-        `Your registration for "${event.title}" has been confirmed. Your ticket is ready in your dashboard.`,
-        `/events/${eventId}`,
-      )
-    } else {
-      await sendNotification(
-        prof.user_id,
-        "waitlist",
-        `All seats for "${event.title}" are currently taken. You've been added to the waiting list and will be notified if a spot opens up.`,
-        `/events/${eventId}`,
-      )
-    }
+  const modeLabel = mode === "online" ? "online" : "in person"
+  if (!isFull) {
+    await sendNotification(
+      profile.user_id,
+      "registration_confirmation",
+      `Your ${modeLabel} registration for "${event.title}" has been confirmed. Your ticket is ready in your dashboard.`,
+      `/events/${eventId}`,
+    )
+  } else {
+    const position = await getWaitlistPosition(
+      eventId,
+      registration.registered_at,
+      event.event_type === "hybrid" ? mode : undefined,
+    )
+    const ahead = Math.max(0, position - 1)
+    await sendNotification(
+      profile.user_id,
+      "waitlist",
+      `"${event.title}" is full for ${modeLabel} attendance. You are number ${position} on the waiting list (${ahead} ahead). You will be notified automatically if a seat opens.`,
+      `/events/${eventId}`,
+    )
   }
+
+  // Keep the audience CRM in sync with everyone who registers.
+  const { syncRegistrantToAudience } = await import("./audienceService")
+  await syncRegistrantToAudience(attendeeId)
 
   if (event.visibility === "private" && code) {
     const { markLinkAsUsed } = await import("./invitationService")
@@ -349,37 +504,86 @@ export async function registerForEvent(eventId: string, attendeeId: string, code
     }
   }
 
-  return { registration: reg, waitlisted: isFull }
+  const waitlistInfo = isFull ? await getWaitlistInfo(eventId, reg.id) : undefined
+  return { registration: reg, waitlisted: isFull, waitlistPosition: waitlistInfo?.position, waitlistInfo }
 }
 
-async function generateTicketForRegistration(registration: Registration, eventTitle: string): Promise<Ticket> {
-  const { data: event } = await supabase
+async function generateTicketForRegistration(
+  registration: Registration,
+  eventTitle: string,
+  eventType?: string | null,
+): Promise<Ticket> {
+  const mode = resolveAttendanceMode(eventType ?? null, registration.attendanceMode)
+  return generateTicket(registration.id, eventTitle, mode, registration.eventId)
+}
+
+/**
+ * Promotes the oldest waitlisted registration (per registration order), issues
+ * its ticket and notifies the attendee.
+ */
+async function promoteFirstWaitlisted(eventId: string, attendanceMode?: AttendanceMode): Promise<Registration | null> {
+  let query = supabase
+    .from("registrations")
+    .select("*")
+    .eq("event_id", eventId)
+    .eq("status", "waitlisted")
+  if (attendanceMode) query = query.eq("attendance_mode", attendanceMode)
+  const { data: waitlisted } = await query.order("registered_at").limit(1)
+
+  if (!waitlisted || waitlisted.length === 0) return null
+  const row = waitlisted[0]
+
+  await supabase.from("registrations").update({ status: "confirmed" }).eq("id", row.id)
+
+  const { data: ev } = await supabase
     .from("events")
-    .select("title")
-    .eq("id", registration.eventId)
+    .select("title, event_type")
+    .eq("id", eventId)
     .single()
+  if (ev) {
+    await generateTicketForRegistration(mapRegistration(row), ev.title, ev.event_type)
+  }
 
-  const title = event?.title ?? eventTitle
-  const uniqueCode = `${title.replace(/[^A-Za-z0-9]/g, "").toUpperCase().slice(0, 6)}-${Date.now().toString(36).toUpperCase()}`
-  const qrDataUrl = await QRCode.toDataURL(uniqueCode, { width: 300, margin: 2 })
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("user_id, first_name, last_name, user:users(email)")
+    .eq("id", row.attendee_id)
+    .maybeSingle()
+  if (prof) {
+    const { sendNotification } = await import("./notificationService")
+    const modeLabel = (row.attendance_mode ?? (ev?.event_type === "online" ? "online" : "in_person")) === "online" ? "online" : "in person"
+    const message = `A seat opened for "${ev?.title ?? "an event"}" (${modeLabel}). You have been moved from the waiting list to confirmed and your ticket is ready.`
+    await sendNotification(
+      prof.user_id,
+      "waitlist_promotion",
+      message,
+      `/events/${eventId}`,
+    )
 
-  const { data: ticket, error } = await supabase
-    .from("tickets")
-    .insert({
-      registration_id: registration.id,
-      unique_code: uniqueCode,
-      qr_code_url: qrDataUrl,
-    })
-    .select()
-    .single()
-  if (error) throw error
-  return mapTicket(ticket)
+    // A promotion is an important status change: send an email as well as the
+    // in-app notification. In mock mode the email is logged to the console.
+    const relatedUser = Array.isArray((prof as any).user) ? (prof as any).user[0] : (prof as any).user
+    const email = relatedUser?.email as string | undefined
+    if (email) {
+      const { sendEmail, textToHtml } = await import("./emailService")
+      const greeting = `${prof.first_name ?? ""} ${prof.last_name ?? ""}`.trim()
+      await sendEmail({
+        to: email,
+        subject: `You are confirmed for ${ev?.title ?? "the event"}`,
+        body: textToHtml(
+          `${greeting ? `Hello ${greeting},\n\n` : ""}${message}\n\nOpen EventFlow to view your ticket: /events/${eventId}`,
+        ),
+      }).catch(() => undefined)
+    }
+  }
+
+  return mapRegistration({ ...row, status: "confirmed" })
 }
 
 export async function cancelRegistration(id: string): Promise<boolean> {
   const { data: reg } = await supabase
     .from("registrations")
-    .select("event_id, status")
+    .select("event_id, status, attendance_mode, event:events(event_type)")
     .eq("id", id)
     .single()
   if (!reg) return false
@@ -390,31 +594,60 @@ export async function cancelRegistration(id: string): Promise<boolean> {
     .eq("id", id)
 
   // Only promote a waitlisted attendee when a *confirmed* spot was freed.
-  if (reg.status !== "confirmed") return true
+  if (reg.status === "confirmed") {
+    const ev: any = (reg as any).event
+    await promoteFirstWaitlisted(
+      reg.event_id,
+      ev?.event_type === "hybrid" ? ((reg as any).attendance_mode ?? "in_person") : undefined,
+    )
+  }
 
-  const { data: waitlisted } = await supabase
+  return true
+}
+
+/**
+ * Organizer/admin hard-delete: the row is removed so the user may register
+ * again. A confirmed deletion auto-promotes the next waitlisted attendee.
+ */
+export async function deleteRegistrationHard(registrationId: string, reason?: string): Promise<boolean> {
+  const { data: reg } = await supabase
     .from("registrations")
-    .select("*")
-    .eq("event_id", reg.event_id)
-    .eq("status", "waitlisted")
-    .order("registered_at")
-    .limit(1)
+    .select("id, event_id, attendee_id, status, attendance_mode, event:events(title, event_type)")
+    .eq("id", registrationId)
+    .maybeSingle()
+  if (!reg) return false
 
-  if (waitlisted && waitlisted.length > 0) {
-    await supabase
-      .from("registrations")
-      .update({ status: "confirmed" })
-      .eq("id", waitlisted[0].id)
+  const { data: tickets } = await supabase.from("tickets").select("id").eq("registration_id", registrationId)
+  const ticketIds = (tickets ?? []).map((t) => t.id)
+  if (ticketIds.length > 0) {
+    await supabase.from("attendance").delete().in("ticket_id", ticketIds)
+    await supabase.from("tickets").delete().in("id", ticketIds)
+  }
+  const { error } = await supabase.from("registrations").delete().eq("id", registrationId)
+  if (error) throw error
 
-    const { data: ev } = await supabase
-      .from("events")
-      .select("title")
-      .eq("id", reg.event_id)
-      .single()
+  const { data: prof } = await supabase
+    .from("profiles")
+    .select("user_id")
+    .eq("id", reg.attendee_id)
+    .maybeSingle()
+  if (prof) {
+    const eventTitle = (reg as any).event?.title ?? "the event"
+    const { sendNotification } = await import("./notificationService")
+    await sendNotification(
+      prof.user_id,
+      "registration_removed",
+      `Your registration for "${eventTitle}" was removed by the organizer.${reason?.trim() ? ` Reason: ${reason.trim()}.` : ""} You can register again if seats are available.`,
+      `/events/${reg.event_id}`,
+    ).catch(() => undefined)
+  }
 
-    if (ev) {
-      await generateTicketForRegistration(mapRegistration(waitlisted[0]), ev.title)
-    }
+  if (reg.status === "confirmed") {
+    const ev: any = (reg as any).event
+    await promoteFirstWaitlisted(
+      reg.event_id,
+      ev?.event_type === "hybrid" ? ((reg as any).attendance_mode ?? "in_person") : undefined,
+    )
   }
 
   return true
@@ -481,10 +714,16 @@ function mapEvent(e: Record<string, any>): Event {
     visibility: e.visibility,
     contactEmail: e.contact_email,
     categoryId: e.category_id,
-    eventType: e.event_type === "online" ? "online" : "in_person",
+    eventType: e.event_type === "online" ? "online" : e.event_type === "hybrid" ? "hybrid" : "in_person",
     meetingLink: e.meeting_link ?? undefined,
     meetingLinkGeneratedBy: e.meeting_link_generated_by ?? undefined,
     meetingLinkCreatedAt: e.meeting_link_created_at ?? undefined,
+    onlineCapacity: e.online_capacity ?? undefined,
+    inPersonCapacity: e.in_person_capacity ?? undefined,
+    meetingProvider: e.meeting_provider ?? undefined,
+    meetingAttendanceMinutes: e.meeting_attendance_minutes ?? undefined,
+    meetingRoomName: e.meeting_room_name ?? undefined,
+    hybridNote: e.hybrid_note ?? undefined,
     deletedAt: e.deleted_at ?? undefined,
   }
 }
@@ -506,6 +745,12 @@ function toDbEvent(e: Omit<Event, "id">): Record<string, unknown> {
     category_id: e.categoryId,
     event_type: e.eventType,
     meeting_link: e.meetingLink ?? null,
+    online_capacity: e.onlineCapacity ?? null,
+    in_person_capacity: e.inPersonCapacity ?? null,
+    meeting_provider: e.meetingProvider ?? "jitsi",
+    meeting_attendance_minutes: e.meetingAttendanceMinutes ?? 10,
+    meeting_room_name: e.meetingRoomName ?? null,
+    hybrid_note: e.hybridNote ?? null,
   }
 }
 
@@ -538,17 +783,7 @@ function mapRegistration(r: Record<string, any>): Registration {
     attendeeId: r.attendee_id,
     registeredAt: r.registered_at,
     status: r.status,
-  }
-}
-
-function mapTicket(t: Record<string, any>): Ticket {
-  return {
-    id: t.id,
-    registrationId: t.registration_id,
-    uniqueCode: t.unique_code,
-    qrCodeUrl: t.qr_code_url,
-    issuedAt: t.issued_at,
-    status: t.status,
+    attendanceMode: r.attendance_mode ?? undefined,
   }
 }
 

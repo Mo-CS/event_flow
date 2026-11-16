@@ -23,6 +23,10 @@ function mapUser(row: Record<string, any>): UserWithProfile {
     createdAt: row.created_at,
     updatedAt: row.updated_at,
     suspended: row.suspended ?? undefined,
+    mustChangePassword: row.must_change_password ?? false,
+    deletedAt: row.deleted_at ?? undefined,
+    scheduledDeletionAt: row.scheduled_deletion_at ?? undefined,
+    deletionReason: row.deletion_reason ?? undefined,
     profile: p
       ? {
           id: p.id,
@@ -48,7 +52,7 @@ export async function getUsers(params: {
 }): Promise<PaginatedResult<UserWithProfile>> {
   let query = supabase
     .from("users")
-    .select("id, email, created_at, updated_at, suspended, profile:profiles(*, role:roles(*))", { count: "exact" })
+    .select("id, email, created_at, updated_at, suspended, must_change_password, deleted_at, scheduled_deletion_at, deletion_reason, profile:profiles(*, role:roles(*))", { count: "exact" })
 
   if (params.search) {
     const q = `%${params.search.toLowerCase()}%`
@@ -67,9 +71,11 @@ export async function getUsers(params: {
   }
 
   if (params.status === "active") {
-    query = query.not("suspended", "is", true)
+    query = query.not("suspended", "is", true).is("deleted_at", null)
   } else if (params.status === "suspended") {
-    query = query.eq("suspended", true)
+    query = query.eq("suspended", true).is("deleted_at", null)
+  } else if (params.status === "deleted") {
+    query = query.not("deleted_at", "is", null)
   }
 
   const page = params.page ?? 1
@@ -94,7 +100,7 @@ export async function getUsers(params: {
 export async function getUserById(id: string): Promise<UserWithProfile | undefined> {
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, created_at, updated_at, suspended, profile:profiles(*, role:roles(*))")
+    .select("id, email, created_at, updated_at, suspended, must_change_password, deleted_at, scheduled_deletion_at, deletion_reason, profile:profiles(*, role:roles(*))")
     .eq("id", id)
     .single()
   if (error) throw error
@@ -282,7 +288,7 @@ export async function getUsersByIds(ids: string[]) {
 export async function getUserByEmail(email: string): Promise<UserWithProfile | undefined> {
   const { data, error } = await supabase
     .from("users")
-    .select("id, email, created_at, updated_at, suspended, profile:profiles(*, role:roles(*))")
+    .select("id, email, created_at, updated_at, suspended, must_change_password, deleted_at, scheduled_deletion_at, deletion_reason, profile:profiles(*, role:roles(*))")
     .eq("email", email)
     .maybeSingle()
   if (error) throw error
@@ -304,6 +310,30 @@ export async function getAttendeeProfiles(): Promise<{ id: string; userId: strin
     firstName: p.first_name,
     lastName: p.last_name,
     email: p.user?.email ?? "",
+  }))
+}
+
+export interface AdminUserRef {
+  userId: string
+  profileId: string
+  email: string
+  name: string
+}
+
+/** All administrators, used for approvals, broadcast and audit notifications. */
+export async function getAdminUserIds(): Promise<AdminUserRef[]> {
+  const { data: roles } = await supabase.from("roles").select("id").eq("name", "admin")
+  if (!roles || roles.length === 0) return []
+  const { data, error } = await supabase
+    .from("profiles")
+    .select("id, user_id, first_name, last_name, user:users(email)")
+    .eq("role_id", roles[0].id)
+  if (error) throw error
+  return (data ?? []).map((p: any) => ({
+    userId: p.user_id,
+    profileId: p.id,
+    email: p.user?.email ?? "",
+    name: `${p.first_name ?? ""} ${p.last_name ?? ""}`.trim() || "Admin",
   }))
 }
 

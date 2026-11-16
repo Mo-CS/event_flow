@@ -16,11 +16,11 @@ export function Login() {
     e.preventDefault()
     setError("")
     try {
-      await login(email, password)
+      const loggedIn = await login(email, password)
       toast.success("Welcome back!")
-      navigate("/dashboard")
-    } catch {
-      setError("Invalid email or password")
+      navigate(loggedIn.mustChangePassword ? "/dashboard/change-password" : "/dashboard")
+    } catch (err) {
+      setError(err instanceof Error ? err.message : "Invalid email or password")
     }
   }
 
@@ -70,6 +70,10 @@ export function Login() {
                 <Link to="/forgot-password" className="text-primary hover:underline">Forgot password?</Link>
                 <Link to="/register" className="text-primary hover:underline">Create account</Link>
               </div>
+              <p className="text-center text-xs text-muted-foreground">
+                Deleted your account?{" "}
+                <Link to="/restore-account" className="text-primary hover:underline">Restore it within the recovery window</Link>
+              </p>
             </form>
           </div>
         </div>
